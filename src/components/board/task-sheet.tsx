@@ -118,7 +118,7 @@ export function TaskSheet({ taskId, mode, open, onOpenChange, onSaved, defaultSt
         .catch(() => {});
       fetch('/api/agents')
         .then(r => r.json())
-        .then(data => setAgents(data.agents || []))
+        .then(data => setAgents(Array.isArray(data) ? data : data.agents || []))
         .catch(() => {});
     }
   }, [open]);
