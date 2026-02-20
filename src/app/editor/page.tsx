@@ -219,8 +219,22 @@ function EditorPageContent() {
     if (path) {
       setProjectPath(path);
     } else if (project && branch) {
-      // Construct path from project and branch
-      setProjectPath(`/tmp/kadens-worktrees/${branch}`);
+      // Resolve worktree path via API
+      fetch(`/api/git/worktrees?project=${encodeURIComponent(project)}`)
+        .then(r => r.json())
+        .then(data => {
+          const worktrees = data.worktrees || [];
+          const wt = worktrees.find((w: { branch: string }) => w.branch === branch);
+          if (wt?.path) {
+            setProjectPath(wt.path);
+          } else {
+            // Fallback: try common patterns
+            const slug = branch.replace(/\//g, '-');
+            const projectName = project.split('-').slice(1).join('-').toLowerCase().replace(/\s+/g, '-');
+            setProjectPath(`/tmp/${projectName}-worktrees/${slug}`);
+          }
+        })
+        .catch(() => setError('Failed to resolve worktree path'));
     } else {
       setError('No project path specified. Use ?project=X&branch=Y or ?path=/tmp/some-worktree');
     }
