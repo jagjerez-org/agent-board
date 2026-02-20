@@ -84,9 +84,13 @@ export function TaskSheet({ taskId, mode, open, onOpenChange, onSaved, defaultSt
   const [branchOpen, setBranchOpen] = useState(false);
   const [branchSearch, setBranchSearch] = useState('');
 
-  const filteredBranches = branchSearch
-    ? branches.filter(b => b.toLowerCase().includes(branchSearch.toLowerCase()))
+  // Include saved branch in list even if not on remote
+  const allBranches = branch && !branches.includes(branch) 
+    ? [branch, ...branches] 
     : branches;
+  const filteredBranches = branchSearch
+    ? allBranches.filter(b => b.toLowerCase().includes(branchSearch.toLowerCase()))
+    : allBranches;
   const [worktreeStatus, setWorktreeStatus] = useState<{ hasWorktree: boolean; path?: string } | null>(null);
   const [agents, setAgents] = useState<{ id: string; name: string; status?: string }[]>([]);
   const [comments, setComments] = useState<{ id: string; author: string; text: string; created_at: string }[]>([]);
