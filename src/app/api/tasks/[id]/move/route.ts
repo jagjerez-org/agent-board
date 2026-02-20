@@ -30,6 +30,17 @@ export async function POST(request: NextRequest, { params }: Props) {
     }
 
     eventBus.emit({ type: 'task:moved', payload: task });
+
+    // Auto-trigger refinement when moved to "refinement" status
+    if (status === 'refinement' && task.assignee) {
+      const baseUrl = request.nextUrl.origin;
+      fetch(`${baseUrl}/api/tasks/${id}/refine`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      }).catch(err => console.error('Auto-refine trigger failed:', err));
+    }
+
     return NextResponse.json(task);
   } catch (error) {
     console.error('Error moving task:', error);

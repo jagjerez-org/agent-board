@@ -38,3 +38,6 @@
 {"id":"54562af7-2f4d-4239-be83-73f80e6e6676","task_id":"94e3815a-ef62-4779-a395-b546dbc47b58","action":"created","details":{"title":"Repair imperson feature","priority":"critical"},"created_at":"2026-02-20T16:24:46.587Z"}
 {"id":"dab8869b-3767-4315-a306-fb514b2318bb","task_id":"94e3815a-ef62-4779-a395-b546dbc47b58","action":"updated","details":{"changes":{"labels":{"from":["feature"],"to":["feature"]},"assignee":{"to":"worker-heavy"}}},"created_at":"2026-02-20T16:34:21.319Z"}
 {"id":"ca3c536b-10a4-4e3b-96dd-f1eccc578f6a","task_id":"94e3815a-ef62-4779-a395-b546dbc47b58","action":"status_changed","details":{"from":"backlog","to":"refinement"},"created_at":"2026-02-20T16:34:35.947Z"}
+{"id":"88d64580-ff13-4b0c-a89a-547be58b5491","task_id":"94e3815a-ef62-4779-a395-b546dbc47b58","action":"status_changed","details":{"from":"refinement","to":"backlog"},"created_at":"2026-02-20T17:06:59.528Z"}
+{"id":"ab457784-2116-42b1-9fdc-38065700844a","task_id":"94e3815a-ef62-4779-a395-b546dbc47b58","action":"status_changed","details":{"from":"backlog","to":"refinement"},"created_at":"2026-02-20T17:07:02.669Z"}
+{"id":"7a33bf3f-1691-4e16-a5d0-80af97f54cb0","task_id":"94e3815a-ef62-4779-a395-b546dbc47b58","action":"updated","details":{"changes":{"refinement":{"to":"> ⏳ Refinement in progress..."}}},"created_at":"2026-02-20T17:07:10.382Z"}
