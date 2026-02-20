@@ -98,6 +98,12 @@ export function AgentSheet({ agentId, open, onOpenChange, onUpdated, agents }: A
   const [logsLoading, setLogsLoading] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(false);
 
+  // Skills
+  interface SkillInfo { name: string; description: string; location: string; source: 'builtin' | 'workspace' | 'agent' }
+  const [skills, setSkills] = useState<SkillInfo[]>([]);
+  const [skillsLoading, setSkillsLoading] = useState(false);
+  const [skillSearch, setSkillSearch] = useState('');
+
   // Live status
   const [liveStatus, setLiveStatus] = useState<LiveStatus | null>(null);
 
@@ -197,6 +203,19 @@ export function AgentSheet({ agentId, open, onOpenChange, onUpdated, agents }: A
       console.error('Failed to load logs');
     } finally {
       setLogsLoading(false);
+    }
+  };
+
+  const loadSkills = async () => {
+    setSkillsLoading(true);
+    try {
+      const res = await fetch('/api/skills');
+      const data = await res.json();
+      setSkills([...(data.builtin || []), ...(data.workspace || [])]);
+    } catch {
+      console.error('Failed to load skills');
+    } finally {
+      setSkillsLoading(false);
     }
   };
 
@@ -305,6 +324,9 @@ export function AgentSheet({ agentId, open, onOpenChange, onUpdated, agents }: A
                 Logs
               </TabsTrigger>
               <TabsTrigger value="files">Files</TabsTrigger>
+              <TabsTrigger value="skills" onClick={() => { if (skills.length === 0 && !skillsLoading) loadSkills(); }}>
+                Skills
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="details" className="space-y-6">
@@ -613,6 +635,70 @@ export function AgentSheet({ agentId, open, onOpenChange, onUpdated, agents }: A
                       </div>
                     )}
                   </div>
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="skills" className="space-y-4">
+              <Input
+                placeholder="Search skills..."
+                value={skillSearch}
+                onChange={(e) => setSkillSearch(e.target.value)}
+              />
+              {skillsLoading ? (
+                <div className="flex items-center justify-center gap-2 py-8 text-muted-foreground">
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  Loading skills...
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* Workspace skills */}
+                  {(() => {
+                    const ws = skills.filter(s => s.source === 'workspace' && (!skillSearch || s.name.toLowerCase().includes(skillSearch.toLowerCase())));
+                    return ws.length > 0 ? (
+                      <div>
+                        <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+                          <Badge variant="default" className="text-[10px]">Workspace</Badge>
+                          {ws.length} skills
+                        </h4>
+                        <div className="space-y-1">
+                          {ws.map(s => (
+                            <div key={s.name} className="flex items-center justify-between py-1.5 px-2 rounded border text-sm hover:bg-muted/50">
+                              <div>
+                                <span className="font-medium">{s.name}</span>
+                                {s.description && <p className="text-xs text-muted-foreground truncate max-w-[300px]">{s.description}</p>}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null;
+                  })()}
+                  {/* Built-in skills */}
+                  {(() => {
+                    const bi = skills.filter(s => s.source === 'builtin' && (!skillSearch || s.name.toLowerCase().includes(skillSearch.toLowerCase())));
+                    return bi.length > 0 ? (
+                      <div>
+                        <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+                          <Badge variant="outline" className="text-[10px]">Built-in</Badge>
+                          {bi.length} skills
+                        </h4>
+                        <div className="space-y-1">
+                          {bi.map(s => (
+                            <div key={s.name} className="flex items-center justify-between py-1.5 px-2 rounded border text-sm hover:bg-muted/50">
+                              <div>
+                                <span className="font-medium">{s.name}</span>
+                                {s.description && <p className="text-xs text-muted-foreground truncate max-w-[300px]">{s.description}</p>}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null;
+                  })()}
+                  {skills.length > 0 && (
+                    <p className="text-xs text-muted-foreground text-center">{skills.length} total skills available</p>
+                  )}
                 </div>
               )}
             </TabsContent>
