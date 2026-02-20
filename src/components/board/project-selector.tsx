@@ -77,13 +77,7 @@ export function ProjectSelector({ value, onValueChange, className }: ProjectSele
     setOpen(false);
   };
 
-  // Load selected project from localStorage on mount
-  useEffect(() => {
-    const savedProjectId = localStorage.getItem('selectedProjectId');
-    if (savedProjectId) {
-      onValueChange(savedProjectId);
-    }
-  }, [onValueChange]);
+  // No longer loading from localStorage here — parent initializes from localStorage directly
 
   return (
     <Popover open={open} onOpenChange={setOpen}>

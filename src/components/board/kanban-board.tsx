@@ -30,7 +30,8 @@ const COLUMN_TITLES: Record<TaskStatus, string> = {
   todo: '🔜 To Do',
   in_progress: '🏃 In Progress',
   review: '👀 Review',
-  done: '✅ Done'
+  done: '✅ Done',
+  production: '🚀 Production'
 };
 
 export function KanbanBoard() {

@@ -48,6 +48,7 @@ export async function writeTask(task: Task, comments: Comment[] = []): Promise<v
   const fileContent = matter.stringify(content, frontmatter);
   const filePath = path.join(TASKS_DIR, `${task.id}.md`);
   
+  await fs.mkdir(TASKS_DIR, { recursive: true });
   await fs.writeFile(filePath, fileContent, 'utf8');
 }
 

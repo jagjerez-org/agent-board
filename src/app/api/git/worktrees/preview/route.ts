@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { spawn } from 'child_process';
+import { spawn, execSync } from 'child_process';
 import fs from 'fs/promises';
 import path from 'path';
 import { getRepoPath, getWorktreeForBranch } from '@/lib/worktree-service';
@@ -333,7 +333,6 @@ export async function DELETE(request: NextRequest) {
     if (server.status === 'running' || server.status === 'starting') {
       // First try killing the entire process tree via pkill
       try {
-        const { execSync } = require('child_process');
         // Kill all descendants of the process group
         execSync(`kill -9 -${server.pid} 2>/dev/null; pkill -9 -P ${server.pid} 2>/dev/null`, { timeout: 5000 });
       } catch { /* ignore — processes may already be dead */ }
@@ -342,7 +341,6 @@ export async function DELETE(request: NextRequest) {
       try { process.kill(server.pid, 'SIGKILL'); } catch { /* ignore */ }
       // Kill anything on the port too
       try {
-        const { execSync } = require('child_process');
         execSync(`fuser -k ${server.port}/tcp 2>/dev/null`, { timeout: 5000 });
       } catch { /* ignore */ }
     }

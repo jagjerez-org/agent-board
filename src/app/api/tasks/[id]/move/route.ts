@@ -41,6 +41,26 @@ export async function POST(request: NextRequest, { params }: Props) {
       }).catch(err => console.error('Auto-refine trigger failed:', err));
     }
 
+    // Auto-trigger execution when moved to "todo"
+    if (status === 'todo') {
+      const baseUrl = request.nextUrl.origin;
+      fetch(`${baseUrl}/api/tasks/${id}/execute`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      }).catch(err => console.error('Auto-execute trigger failed:', err));
+    }
+
+    // Auto-create PR when moved to "done"
+    if (status === 'done' && task.branch) {
+      const baseUrl = request.nextUrl.origin;
+      fetch(`${baseUrl}/api/tasks/${id}/create-pr`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      }).catch(err => console.error('Auto-PR creation failed:', err));
+    }
+
     return NextResponse.json(task);
   } catch (error) {
     console.error('Error moving task:', error);

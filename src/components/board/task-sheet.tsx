@@ -47,7 +47,85 @@ import remarkGfm from 'remark-gfm';
 
 function RefinementMarkdown({ content }: { content: string }) {
   return (
-    <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+    <div className="notion-md">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          h1: ({ children }) => (
+            <h1 className="text-[1.25em] font-bold mt-6 mb-1 text-foreground tracking-tight">{children}</h1>
+          ),
+          h2: ({ children }) => (
+            <h2 className="text-[1.1em] font-semibold mt-5 mb-1 text-foreground tracking-tight">{children}</h2>
+          ),
+          h3: ({ children }) => (
+            <h3 className="text-[1em] font-semibold mt-4 mb-0.5 text-foreground">{children}</h3>
+          ),
+          h4: ({ children }) => (
+            <h4 className="text-[0.95em] font-medium mt-3 mb-0.5 text-foreground/90">{children}</h4>
+          ),
+          p: ({ children }) => (
+            <p className="text-[0.875rem] text-foreground/80 my-[0.35em] leading-[1.7]">{children}</p>
+          ),
+          ul: ({ children }) => (
+            <ul className="my-[0.2em] pl-0 space-y-[2px] list-none">{children}</ul>
+          ),
+          ol: ({ children }) => (
+            <ol className="my-[0.2em] pl-6 space-y-[2px] list-decimal marker:text-foreground/40">{children}</ol>
+          ),
+          li: ({ children, node }) => {
+            // Check if this is a checkbox item (task list)
+            const firstChild = node?.children?.[0];
+            const hasCheckbox = firstChild && 'tagName' in firstChild && firstChild.tagName === 'input';
+            if (hasCheckbox) {
+              return (
+                <li className="text-[0.875rem] text-foreground/80 leading-[1.7] flex items-start gap-2 list-none pl-0 py-[1px]">
+                  {children}
+                </li>
+              );
+            }
+            return (
+              <li className="text-[0.875rem] text-foreground/80 leading-[1.7] flex items-start gap-2 pl-1 py-[1px]">
+                <span className="mt-[0.6em] w-[5px] h-[5px] rounded-full bg-foreground/50 flex-shrink-0" />
+                <span className="flex-1">{children}</span>
+              </li>
+            );
+          },
+          strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
+          em: ({ children }) => <em className="text-foreground/60">{children}</em>,
+          code: ({ children, className }) => {
+            if (className?.includes('language-')) {
+              return <code className={`block bg-[hsl(var(--muted))] rounded-md p-3 text-[0.8rem] font-mono my-2 overflow-x-auto leading-[1.6] ${className}`}>{children}</code>;
+            }
+            return <code className="bg-[hsl(var(--muted))] text-[#e06c75] px-[5px] py-[2px] rounded text-[0.82em] font-mono">{children}</code>;
+          },
+          pre: ({ children }) => <pre className="my-2 rounded-md overflow-hidden">{children}</pre>,
+          blockquote: ({ children }) => (
+            <div className="my-2 pl-3.5 border-l-[3px] border-foreground/20 text-foreground/60">
+              {children}
+            </div>
+          ),
+          hr: () => <hr className="my-4 border-none h-[1px] bg-border" />,
+          a: ({ href, children }) => (
+            <a href={href} className="text-foreground/80 underline decoration-foreground/30 underline-offset-2 hover:decoration-foreground/60 transition-colors" target="_blank" rel="noopener noreferrer">{children}</a>
+          ),
+          input: ({ checked, ...props }) => (
+            <span className={`inline-flex items-center justify-center w-4 h-4 rounded border flex-shrink-0 mt-[3px] ${checked ? 'bg-blue-500 border-blue-500' : 'border-foreground/30 bg-transparent'}`}>
+              {checked && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+            </span>
+          ),
+          table: ({ children }) => (
+            <div className="overflow-x-auto my-3 rounded border border-border">
+              <table className="text-[0.82rem] w-full border-collapse">{children}</table>
+            </div>
+          ),
+          thead: ({ children }) => <thead className="bg-muted/60">{children}</thead>,
+          th: ({ children }) => <th className="border-b border-border px-3 py-1.5 text-left font-semibold text-foreground text-[0.82rem]">{children}</th>,
+          td: ({ children }) => <td className="border-b border-border/50 px-3 py-1.5 text-foreground/80">{children}</td>,
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+    </div>
   );
 }
 
@@ -59,6 +137,7 @@ const STATUS_LABELS: Record<TaskStatus, string> = {
   in_progress: '🏃 In Progress',
   review: '👀 Review',
   done: '✅ Done',
+  production: '🚀 Production',
 };
 
 const PRIORITY_LABELS: Record<Priority, string> = {
@@ -118,6 +197,7 @@ export function TaskSheet({ taskId, mode, open, onOpenChange, onSaved, defaultSt
   const [addingComment, setAddingComment] = useState(false);
   const [refinement, setRefinement] = useState('');
   const [refining, setRefining] = useState(false);
+  const [refineError, setRefineError] = useState<string | null>(null);
   const [chatMessages, setChatMessages] = useState<{ id: string; role: string; content: string; images?: string[]; timestamp: string; agent_id?: string }[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [chatSending, setChatSending] = useState(false);
@@ -125,7 +205,18 @@ export function TaskSheet({ taskId, mode, open, onOpenChange, onSaved, defaultSt
   const chatEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Execution logs
+  const [execStatus, setExecStatus] = useState<{ status: string; agentId?: string; startedAt?: string; summary?: string; sessionKey?: string } | null>(null);
+  const [execLogs, setExecLogs] = useState<string[]>([]);
+  const execLogsEndRef = useRef<HTMLDivElement>(null);
+
   // Load projects and agents
+  useEffect(() => {
+    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
+
   useEffect(() => {
     if (open) {
       fetch('/api/projects')
@@ -231,6 +322,33 @@ export function TaskSheet({ taskId, mode, open, onOpenChange, onSaved, defaultSt
       setProjectId(defaultProjectId || '');
     }
   }, [mode, taskId, open, defaultStatus]);
+
+  // Poll execution status for in_progress tasks
+  useEffect(() => {
+    if (!taskId || !open || mode !== 'edit') return;
+    
+    const pollExec = async () => {
+      try {
+        const res = await fetch(`/api/tasks/${taskId}/execute`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.status !== 'idle') {
+            setExecStatus(data);
+            // If there's a sessionKey, try to get logs
+            if (data.sessionKey) {
+              setExecLogs(prev => prev.length ? prev : ['Agent session started...']);
+            }
+          } else {
+            setExecStatus(null);
+          }
+        }
+      } catch { /* ignore */ }
+    };
+    
+    pollExec();
+    const interval = setInterval(pollExec, 5000);
+    return () => clearInterval(interval);
+  }, [taskId, open, mode]);
 
   const handleCreateBranch = (branchName: string) => {
     setBranchOpen(false);
@@ -408,31 +526,65 @@ export function TaskSheet({ taskId, mode, open, onOpenChange, onSaved, defaultSt
                   <Button variant="outline" size="sm" disabled={refining || !assignee}
                     onClick={async () => {
                       setRefining(true);
+                      setRefineError(null);
                       try {
-                        await fetch(`/api/tasks/${taskId}/refine`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
-                        // Poll for updates
+                        const postRes = await fetch(`/api/tasks/${taskId}/refine`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+                        if (!postRes.ok) {
+                          const err = await postRes.json().catch(() => ({}));
+                          throw new Error(err.error || 'Failed to start refinement');
+                        }
+                        // Poll refinement status endpoint
+                        let failCount = 0;
                         const poll = setInterval(async () => {
-                          const [taskRes, chatRes] = await Promise.all([
-                            fetch(`/api/tasks/${taskId}`), fetch(`/api/tasks/${taskId}/chat`),
-                          ]);
-                          const td = await taskRes.json(); const cd = await chatRes.json();
-                          setChatMessages(cd.messages || []);
-                          const ref = (td.task as any)?.refinement || '';
-                          if (ref && !ref.includes('⏳')) { setRefinement(ref); setRefining(false); clearInterval(poll); }
+                          try {
+                            const [statusRes, chatRes] = await Promise.all([
+                              fetch(`/api/tasks/${taskId}/refine`),
+                              fetch(`/api/tasks/${taskId}/chat`),
+                            ]);
+                            if (!statusRes.ok) { failCount++; if (failCount > 5) throw new Error('Status polling failed'); return; }
+                            const statusData = await statusRes.json();
+                            const cd = await chatRes.json().catch(() => ({ messages: [] }));
+                            setChatMessages(cd.messages || []);
+                            failCount = 0;
+
+                            if (statusData.status === 'done') {
+                              const taskRes = await fetch(`/api/tasks/${taskId}`);
+                              const td = await taskRes.json();
+                              const ref = (td.task as any)?.refinement || '';
+                              setRefinement(ref);
+                              setRefining(false);
+                              clearInterval(poll);
+                              if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+                                new Notification('✅ Refinement Complete', { body: `Task "${title}" has been refined.` });
+                              }
+                            } else if (statusData.status === 'error') {
+                              setRefining(false);
+                              setRefineError(statusData.error || 'Agent failed — possibly no credits or model unavailable');
+                              clearInterval(poll);
+                            }
+                          } catch (e: any) {
+                            if (failCount > 5) { setRefining(false); setRefineError('Lost connection to server'); clearInterval(poll); }
+                          }
                         }, 3000);
-                        setTimeout(() => { clearInterval(poll); setRefining(false); }, 120000);
-                      } catch { setRefining(false); }
+                        setTimeout(() => { clearInterval(poll); if (refining) { setRefining(false); setRefineError('Refinement timed out (3 min). The agent may still be working — check Agents page.'); } }, 180000);
+                      } catch (e: any) { setRefining(false); setRefineError(e.message || 'Failed to start refinement'); }
                     }}>
                     {refinement ? '🔄 Re-refine' : '✨ Auto-refine'}
                   </Button>
                 </div>
 
+                {/* Error display */}
+                {refineError && (
+                  <div className="px-4 py-2 bg-red-500/10 border-b border-red-500/20">
+                    <p className="text-sm text-red-400">❌ {refineError}</p>
+                    <button className="text-xs text-red-300 underline mt-1" onClick={() => setRefineError(null)}>Dismiss</button>
+                  </div>
+                )}
+
                 {/* Refinement document */}
                 {refinement && !refinement.includes('⏳') && (
-                  <div className="px-4 py-3 border-b bg-background/50">
-                    <div className="prose prose-sm prose-invert max-w-none [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:mt-3 [&_h3]:mb-1 [&_ul]:my-1 [&_li]:my-0 [&_p]:my-1 [&_input[type=checkbox]]:mr-1.5">
-                      <RefinementMarkdown content={refinement} />
-                    </div>
+                  <div className="px-4 py-3 border-b bg-background/50 max-w-none">
+                    <RefinementMarkdown content={refinement} />
                   </div>
                 )}
 
@@ -487,6 +639,57 @@ export function TaskSheet({ taskId, mode, open, onOpenChange, onSaved, defaultSt
                     onClick={sendChatMessage}>
                     Send
                   </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Execution Status Section */}
+            {execStatus && mode === 'edit' && (
+              <div className="border rounded-lg overflow-hidden bg-muted/20">
+                <div className="flex items-center justify-between px-4 py-2 border-b bg-blue-500/10">
+                  <label className="text-sm font-bold flex items-center gap-2">
+                    🏃 Execution
+                    {(execStatus.status === 'pending' || execStatus.status === 'spawned' || execStatus.status === 'running') && (
+                      <span className="text-xs text-blue-400 animate-pulse">
+                        {execStatus.status === 'pending' ? 'Queued...' : 'Agent working...'}
+                      </span>
+                    )}
+                    {execStatus.status === 'done' && <span className="text-xs text-green-400">✅ Complete</span>}
+                  </label>
+                  {execStatus.agentId && (
+                    <span className="text-xs text-muted-foreground">🤖 {execStatus.agentId}</span>
+                  )}
+                </div>
+                <div className="px-4 py-3 space-y-2">
+                  <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                    {execStatus.startedAt && (
+                      <span>Started: {new Date(execStatus.startedAt).toLocaleTimeString()}</span>
+                    )}
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                      execStatus.status === 'done' ? 'bg-green-500/20 text-green-400' :
+                      execStatus.status === 'pending' ? 'bg-yellow-500/20 text-yellow-400' :
+                      'bg-blue-500/20 text-blue-400'
+                    }`}>
+                      {execStatus.status}
+                    </span>
+                  </div>
+                  {execStatus.summary && (
+                    <div className="text-sm text-foreground/80 bg-background/50 rounded p-2">
+                      {execStatus.summary}
+                    </div>
+                  )}
+                  {(execStatus.status === 'spawned' || execStatus.status === 'running') && (
+                    <div className="bg-background/50 rounded p-3 font-mono text-xs text-foreground/60 max-h-48 overflow-y-auto">
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+                        <span>Agent is working on this task...</span>
+                      </div>
+                      <p className="text-foreground/40">The agent sub-session is executing the implementation. Progress will appear here when available.</p>
+                      {execStatus.sessionKey && (
+                        <p className="mt-2 text-foreground/30">Session: {execStatus.sessionKey}</p>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             )}

@@ -19,6 +19,7 @@ interface ChatMessage {
 }
 
 const CHAT_DIR = join(process.cwd(), 'data', 'chats');
+const REFINE_DIR = join(process.cwd(), 'data', 'refinements');
 
 async function getChatMessages(taskId: string): Promise<ChatMessage[]> {
   const filePath = join(CHAT_DIR, `${taskId}.json`);
@@ -44,6 +45,23 @@ async function getGatewayConfig(): Promise<{ url: string; token: string } | null
   } catch { return null; }
 }
 
+// GET /api/tasks/[id]/refine — poll refinement status
+export async function GET(_request: NextRequest, { params }: Props) {
+  const { id } = await params;
+  const statusFile = join(REFINE_DIR, `${id}.json`);
+  
+  if (!existsSync(statusFile)) {
+    return NextResponse.json({ status: 'idle' });
+  }
+  
+  try {
+    const data = JSON.parse(await readFile(statusFile, 'utf8'));
+    return NextResponse.json(data);
+  } catch {
+    return NextResponse.json({ status: 'idle' });
+  }
+}
+
 // POST /api/tasks/[id]/refine — trigger refinement with chat context
 export async function POST(request: NextRequest, { params }: Props) {
   try {
@@ -58,28 +76,15 @@ export async function POST(request: NextRequest, { params }: Props) {
       `[${m.role === 'user' ? 'Jose Alejandro' : m.agent_id || 'Agent'}]: ${m.content}${m.images?.length ? ` (${m.images.length} image(s) attached)` : ''}`
     ).join('\n');
 
-    const prompt = `Refine this task for the development board. 
-
-**Task:** ${task.title}
-**Description:** ${task.description || 'No description'}
-**Priority:** ${task.priority}
-**Project:** ${task.project_id || 'None'}
-
-${task.refinement ? `**Previous Refinement:**\n${task.refinement}\n` : ''}
-${chatContext ? `**Conversation:**\n${chatContext}\n` : ''}
-
-Produce a structured refinement in markdown with:
-### Summary
-### Acceptance Criteria (checkbox list)
-### Technical Approach
-### Edge Cases
-### Estimated Effort
-
-Reply ONLY with the markdown. Be concise and specific.`;
-
     const agentId = task.assignee || 'worker-code';
+    const refinePath = join(REFINE_DIR, `${id}.json`);
+    const resultPath = join(REFINE_DIR, `${id}.md`);
 
-    // Add agent "thinking" message
+    // Write status file
+    if (!existsSync(REFINE_DIR)) await mkdir(REFINE_DIR, { recursive: true });
+    await writeFile(refinePath, JSON.stringify({ status: 'running', agentId, startedAt: new Date().toISOString() }), 'utf8');
+
+    // Add agent "thinking" message to chat
     await addChatMessage(id, {
       id: uuidv4(),
       role: 'agent',
@@ -93,24 +98,98 @@ Reply ONLY with the markdown. Be concise and specific.`;
       refinement: '> ⏳ Refinement in progress...',
     });
 
-    // Try to spawn via OpenClaw (non-blocking)
+    const prompt = `You are refining a task for the development board. 
+
+**Task:** ${task.title}
+**Description:** ${task.description || 'No description'}
+**Priority:** ${task.priority}
+**Project:** ${task.project_id || 'None'}
+
+${task.refinement && !task.refinement.startsWith('>') ? `**Previous Refinement:**\n${task.refinement}\n` : ''}
+${chatContext ? `**Conversation:**\n${chatContext}\n` : ''}
+
+Produce a structured refinement in markdown with:
+### Summary
+### Acceptance Criteria (checkbox list)
+### Technical Approach
+### Edge Cases
+### Estimated Effort
+
+IMPORTANT: After generating the refinement, you MUST save the result by writing to these files:
+1. Write the markdown refinement to: ${resultPath}
+2. Write this JSON to: ${refinePath}
+   {"status":"done","agentId":"${agentId}","completedAt":"<current ISO timestamp>"}
+
+Also update the task file by reading and updating: ${join(process.cwd(), 'data', 'tasks', `${id}.md`)}
+- Update the \`refinement\` field in the YAML frontmatter with the full markdown (use | for multiline).
+
+Be concise and specific. Do all file writes before finishing.`;
+
+    // Spawn agent directly via OpenClaw gateway
     const gateway = await getGatewayConfig();
-    if (gateway) {
-      // Fire and forget — the agent will update the task when done
-      fetch(`${gateway.url}/api/v1/sessions/send`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${gateway.token}` },
-        body: JSON.stringify({
-          message: prompt,
-          label: `refine-task-${id}`,
-          agentId,
-        }),
-      }).catch(() => {});
+    if (!gateway) {
+      await writeFile(refinePath, JSON.stringify({ status: 'pending', agentId, taskId: id, prompt, startedAt: new Date().toISOString() }, null, 2), 'utf8');
+      return NextResponse.json({ status: 'started', agentId });
     }
 
-    return NextResponse.json({ status: 'started', agentId });
+    try {
+      const spawnRes = await fetch(`${gateway.url}/api/sessions/spawn`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${gateway.token}` },
+        body: JSON.stringify({ task: prompt, agentId, label: `refine-${id.slice(0, 8)}` }),
+      });
+      if (!spawnRes.ok) throw new Error(`Spawn failed: ${spawnRes.status}`);
+      const spawnData = await spawnRes.json();
+      await writeFile(refinePath, JSON.stringify({ status: 'spawned', agentId, taskId: id, prompt, startedAt: new Date().toISOString(), spawnedAt: new Date().toISOString(), sessionKey: spawnData.childSessionKey }, null, 2), 'utf8');
+      return NextResponse.json({ status: 'spawned', agentId, sessionKey: spawnData.childSessionKey });
+    } catch (err: any) {
+      console.error('Direct spawn failed, queuing:', err.message);
+      await writeFile(refinePath, JSON.stringify({ status: 'pending', agentId, taskId: id, prompt, startedAt: new Date().toISOString() }, null, 2), 'utf8');
+      return NextResponse.json({ status: 'started', agentId });
+    }
   } catch (error: any) {
     console.error('Refine error:', error);
+    return NextResponse.json({ error: error.message || 'Failed' }, { status: 500 });
+  }
+}
+
+// PUT /api/tasks/[id]/refine — callback to update refinement result (can be called by agent or externally)
+export async function PUT(request: NextRequest, { params }: Props) {
+  try {
+    const { id } = await params;
+    const body = await request.json();
+    const { refinement, agentId } = body;
+
+    if (!refinement) {
+      return NextResponse.json({ error: 'refinement content required' }, { status: 400 });
+    }
+
+    const result = await getTask(id);
+    if (!result) return NextResponse.json({ error: 'Task not found' }, { status: 404 });
+
+    // Update the task with refinement
+    await updateTask(id, { refinement });
+
+    // Update status file
+    const refinePath = join(REFINE_DIR, `${id}.json`);
+    if (!existsSync(REFINE_DIR)) await mkdir(REFINE_DIR, { recursive: true });
+    await writeFile(refinePath, JSON.stringify({ 
+      status: 'done', 
+      agentId: agentId || 'unknown',
+      completedAt: new Date().toISOString() 
+    }), 'utf8');
+
+    // Add completion message to chat
+    await addChatMessage(id, {
+      id: uuidv4(),
+      role: 'agent',
+      content: '✅ Refinement complete.',
+      timestamp: new Date().toISOString(),
+      agent_id: agentId,
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Failed' }, { status: 500 });
   }
 }

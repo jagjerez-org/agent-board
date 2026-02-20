@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { spawn } from 'child_process';
+import { spawn, execSync } from 'child_process';
 import { getRepoPath, getWorktreeForBranch } from '@/lib/worktree-service';
 import { resolveProjectId } from '@/lib/project-resolver';
 import fs from 'fs/promises';
@@ -268,8 +268,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const consoleId = searchParams.get('consoleId');
     const project = await resolveProjectId(rawProject);
-    const key = logService['getProcessKey'](project, branch, commandId || undefined);
+    const key = consoleId 
+      ? `${project}:${branch}:${consoleId}`
+      : logService['getProcessKey'](project, branch, commandId || undefined);
     const stream = logService.subscribe(key);
     
     return new NextResponse(stream, {
@@ -295,7 +298,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { project: rawProject, branch, command } = body;
+    const { project: rawProject, branch, command, consoleId } = body;
     
     if (!rawProject || !branch || !command) {
       return NextResponse.json(
@@ -350,9 +353,10 @@ export async function POST(request: NextRequest) {
     const { PORT: _port, ...cleanEnv } = process.env;
     const env = { ...cleanEnv, NODE_ENV: 'development', PATH: `${extraPaths}:${process.env.PATH}` };
     
-    // Spawn the command
+    // Spawn the command in its own process group so we can kill the whole tree
     const childProcess = spawn('bash', ['-c', command], {
       cwd: worktree.path,
+      detached: true,
       stdio: ['ignore', 'pipe', 'pipe'],
       env: env as NodeJS.ProcessEnv
     });
@@ -371,8 +375,10 @@ export async function POST(request: NextRequest) {
     commands.push(logCommand);
     await saveCommands(commands);
     
-    // Add to log service — use branch-level key (no commandId) so the SSE subscription picks it up
-    const key = logService['getProcessKey'](project, branch);
+    // Use consoleId key if provided, otherwise branch-level key
+    const key = consoleId 
+      ? `${project}:${branch}:${consoleId}`
+      : logService['getProcessKey'](project, branch);
     logService.addProcess(key, childProcess, logCommand);
     
     return NextResponse.json({
@@ -392,14 +398,16 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const body = await request.json();
-    const { project: rawProject, branch } = body;
+    const { project: rawProject, branch, consoleId } = body;
 
     if (!rawProject || !branch) {
       return NextResponse.json({ error: 'project and branch required' }, { status: 400 });
     }
 
     const project = await resolveProjectId(rawProject);
-    const key = logService['getProcessKey'](project, branch);
+    const key = consoleId 
+      ? `${project}:${branch}:${consoleId}`
+      : logService['getProcessKey'](project, branch);
     const processData = logService['processes'].get(key);
 
     if (!processData?.process?.pid) {
@@ -409,19 +417,27 @@ export async function DELETE(request: NextRequest) {
     const pid = processData.process.pid;
     // Kill entire process tree aggressively
     try {
-      const { execSync } = require('child_process');
-      execSync(`kill -9 -${pid} 2>/dev/null; pkill -9 -P ${pid} 2>/dev/null`, { timeout: 5000 });
+      // Kill process group (works because we spawn with detached: true)
+      execSync(`kill -TERM -${pid} 2>/dev/null; sleep 0.5; kill -9 -${pid} 2>/dev/null`, { timeout: 5000 });
+    } catch { /* ignore */ }
+    // Also kill all descendants via pgrep tree walk
+    try {
+      execSync(`pids=$(pgrep -P ${pid} 2>/dev/null); while [ -n "$pids" ]; do for p in $pids; do kill -9 $p 2>/dev/null; done; pids=$(for p in $pids; do pgrep -P $p 2>/dev/null; done); done`, { timeout: 5000 });
     } catch { /* ignore */ }
     try { process.kill(-pid, 'SIGKILL'); } catch { /* ignore */ }
     try { process.kill(pid, 'SIGKILL'); } catch { /* ignore */ }
 
-    // Notify subscribers
+    // Notify subscribers once, then close SSE connections
     const encoder = new TextEncoder();
     processData.subscribers.forEach((controller: ReadableStreamDefaultController) => {
       try {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'system', message: 'Process killed by user', timestamp: new Date().toISOString() })}\n\n`));
+        controller.close();
       } catch { /* ignore */ }
     });
+
+    // Remove process from map so subsequent DELETE calls get 404
+    logService['processes'].delete(key);
 
     return NextResponse.json({ success: true, message: 'Process killed' });
   } catch (error) {

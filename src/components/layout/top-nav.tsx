@@ -4,7 +4,7 @@ import { Suspense } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Activity, Users, FolderOpen, GitBranch, Wrench, LayoutDashboard } from 'lucide-react';
+import { Activity, Users, FolderOpen, GitBranch, Wrench, LayoutDashboard, Server } from 'lucide-react';
 
 const navItems = [
   { href: '/', label: 'Board', icon: LayoutDashboard },
@@ -13,6 +13,7 @@ const navItems = [
   { href: '/skills', label: 'Skills', icon: Wrench },
   { href: '/activity', label: 'Activity', icon: Activity },
   { href: '/worktrees', label: 'Worktrees', icon: GitBranch },
+  { href: '/services', label: 'Services', icon: Server },
 ];
 
 function TopNavInner() {

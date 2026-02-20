@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { KanbanBoard } from '@/components/board/kanban-board-simple';
 import { ProjectSelector } from '@/components/board/project-selector';
 import { Button } from '@/components/ui/button';
@@ -14,7 +14,15 @@ import {
 
 export default function BoardPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [selectedProject, setSelectedProject] = useState<string | undefined>();
+  const [selectedProject, setSelectedProject] = useState<string | undefined>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('selectedProjectId') || undefined;
+    }
+    return undefined;
+  });
+  const handleProjectChange = useCallback((value: string | undefined) => {
+    setSelectedProject(value);
+  }, []);
   const createTaskRef = useRef<(() => void) | null>(null);
 
   return (
@@ -25,7 +33,7 @@ export default function BoardPage() {
           <div className="flex-1 flex justify-center">
             <ProjectSelector
               value={selectedProject}
-              onValueChange={setSelectedProject}
+              onValueChange={handleProjectChange}
             />
           </div>
           <div className="flex items-center space-x-2">

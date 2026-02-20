@@ -49,6 +49,21 @@ jobs:
           path: ${{ env.ZIP_NAME }}
           retention-days: 30
 
+      - name: Package skill zip
+        run: |
+          mkdir -p dist
+          SKILL_ZIP="dist/agent-board-skill-v${VERSION}.zip"
+          # Skill zip contains SKILL.md + scripts for OpenClaw skill installation
+          cd skill && zip -r "../${SKILL_ZIP}" SKILL.md scripts/
+          echo "SKILL_ZIP=$SKILL_ZIP" >> "$GITHUB_ENV"
+
+      - name: Upload skill artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-board-skill-v${{ env.VERSION }}
+          path: ${{ env.SKILL_ZIP }}
+          retention-days: 30
+
   publish-clawhub:
     needs: ci
     # Disabled: ClawHub requires GitHub account > 7 days old. Re-enable after ~2026-02-24.

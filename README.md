@@ -1,5 +1,7 @@
 # 📋 Agent Board
 
+[![CI](https://github.com/jagjerez-org/agent-board/actions/workflows/ci.yml/badge.svg)](https://github.com/jagjerez-org/agent-board/actions/workflows/ci.yml)
+
 **Trello-like task management for AI agent orchestration.**
 
 A self-hosted project board built for managing tasks across AI agents (OpenClaw workers). Features drag-and-drop kanban, project-scoped boards with Git provider integration, real-time agent status, file editing, and activity tracking.

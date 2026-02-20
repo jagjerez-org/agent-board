@@ -1,202 +1,76 @@
 ---
 name: agent-board
-description: Kanban board UI for managing tasks and AI agent orchestration. Create, refine, assign, and track tasks across agents.
-metadata:
-  openclaw:
-    emoji: "📋"
-    requires:
-      bins: ["node", "npm"]
+description: AI-driven Kanban board for task management, Git worktrees, code editing, and agent orchestration. Auto-starts on skill load. Includes built-in watchdog to keep the service alive.
 ---
 
-# Agent Board Skill
+# Agent Board
 
-A Trello-like kanban board designed specifically for AI agent orchestration with OpenClaw.
+Trello-like task management board for AI agent orchestration. Next.js app at port 9100.
+
+## Setup (on first load)
+
+1. Start the service:
+```bash
+bash skills/agent-board/scripts/start.sh
+```
+
+2. Register the watchdog cron job to keep it alive (run once):
+```bash
+# The agent should create this cron job automatically:
+```
+Use `cron add` with:
+- `name`: `watchdog:agent-board`
+- `schedule`: `{"kind": "every", "everyMs": 120000}`
+- `sessionTarget`: `"isolated"`
+- `delivery`: `{"mode": "none"}`
+- `payload`: `{"kind": "agentTurn", "message": "Run: bash /home/jarvis/.openclaw/workspace/skills/agent-board/scripts/watchdog.sh — if output contains 'Restarting', report to user. Otherwise reply OK.", "timeoutSeconds": 30}`
+
+Before creating, check `cron list` for existing `watchdog:agent-board`. Update if exists, create if not.
+
+3. Add to HEARTBEAT.md as backup (optional):
+```markdown
+## Agent Board Health Check
+Check if http://127.0.0.1:9100/ is responding. If not:
+\`\`\`bash
+bash skills/agent-board/scripts/start.sh
+\`\`\`
+Report to user only if it was down and you restarted it.
+```
+
+## Access
+
+- **Local:** http://localhost:9100
+- **LAN:** http://<host-ip>:9100
 
 ## Features
 
-- **📋 Kanban Board**: 7-column workflow (Backlog → Refinement → Pending Approval → To Do → In Progress → Review → Done)
-- **🤖 Agent Management**: Org chart view of agent hierarchy with status tracking
-- **📝 File-based Storage**: Human-readable tasks stored as markdown with YAML frontmatter
-- **🔄 Activity Feed**: Track all task and agent activities
-- **🎯 Smart Filtering**: Filter tasks by assignee, priority, labels, and status
-- **📊 Real-time Updates**: Live board updates as tasks move through workflow
-- **🔗 GitHub Integration**: Link and track PR status for each task
+- **Kanban Board** — drag-and-drop tasks across status columns
+- **Git Worktrees** — branch management, worktree creation, per-branch preview/logs
+- **Code Editor** — Monaco editor with TypeScript lint, autocomplete, file creation
+- **Skills Management** — CRUD skills, ClawHub integration, per-agent assignment
+- **Agents** — view agent hierarchy, status, skill assignments
+- **Projects** — auto-discovered from GitHub/GitLab providers
+- **Preview** — auto-detect project type (Flutter/Node/monorepo), spawn dev servers per worktree
+- **Multi-Console** — multiple terminal tabs per worktree branch
 
-## Task Workflow
+## Scripts
 
-### Status Transitions
-```
-📋 Backlog → 🔍 Refinement → ⏳ Pending Approval → 🔜 To Do → 🏃 In Progress → 👀 Review → ✅ Done
-```
+| Script | Purpose |
+|--------|---------|
+| `scripts/start.sh` | Start if not running (idempotent, uses `setsid`) |
+| `scripts/stop.sh` | Stop the service |
+| `scripts/watchdog.sh` | Health check + auto-restart if down |
 
-Valid transitions:
-- **Backlog** → Refinement (needs clarification)
-- **Refinement** → Pending Approval (refined and ready) or back to Backlog
-- **Pending Approval** → To Do (approved) or back to Refinement (needs rework)
-- **To Do** → In Progress (agent picks up) or back to Backlog
-- **In Progress** → Review (ready for review) or back to Backlog
-- **Review** → Done (approved) or back to Refinement (needs rework) or back to Backlog
-- Any status → Backlog (deprioritize/archive)
+## Rebuild after code changes
 
-## File Structure
-
-```
-data/
-├── tasks/
-│   ├── {task-id}.md          # Task with YAML frontmatter + comments
-│   └── ...
-├── agents/
-│   ├── {agent-id}.json       # Agent config and status
-│   └── ...
-├── activity.jsonl             # Append-only activity log
-├── board-state.json           # Board preferences
-└── index.json                 # Task index for fast queries
-```
-
-### Task File Format
-
-```markdown
----
-id: abc123
-title: Fix entity switching bug
-status: in_progress
-priority: high
-assignee: worker-opus
-story_points: 5
-due_date: 2026-03-01
-pr_url: https://github.com/user/repo/pull/188
-pr_status: open
-labels: [bug, urgent]
-sort_order: 0
-created_at: 2026-02-20T01:00:00Z
-updated_at: 2026-02-20T02:00:00Z
----
-
-## Description
-
-Fix the entity switching behavior when navigating between detail pages...
-
-## Comments
-
-### user — 2026-02-20 01:30:00
-Please check the redirect logic in entity-switcher.tsx
-
-### worker-opus — 2026-02-20 01:45:00
-Found the issue. The `routeCapabilityMap` wasn't checking nested routes...
-```
-
-## API Endpoints
-
-### Tasks
-- `GET /api/tasks` - List tasks (supports filtering)
-- `POST /api/tasks` - Create task
-- `GET /api/tasks/{id}` - Get task with comments
-- `PATCH /api/tasks/{id}` - Update task
-- `DELETE /api/tasks/{id}` - Delete task
-- `POST /api/tasks/{id}/move` - Move to new status
-- `POST /api/tasks/{id}/assign` - Assign to agent
-- `POST /api/tasks/{id}/comments` - Add comment
-- `POST /api/tasks/{id}/link-pr` - Link GitHub PR
-
-### Agents
-- `GET /api/agents` - List agents
-- `POST /api/agents` - Register agent
-- `PATCH /api/agents/{id}` - Update agent
-- `POST /api/agents/seed` - Seed default OpenClaw agents
-
-### Activity
-- `GET /api/activity` - Activity feed (supports filtering)
-
-## Usage
-
-### Start the Board
 ```bash
-# Development mode
-npm run dev
-
-# Production mode
-npm run build && npm start
+cd /tmp/agent-board && npx next build
+bash skills/agent-board/scripts/stop.sh
+bash skills/agent-board/scripts/start.sh
 ```
 
-### Create Tasks
-1. Click "+" button on any column
-2. Fill out task details (title, description, priority, etc.)
-3. Assign to agent or leave unassigned
-4. Task starts in Backlog unless created in specific column
+## Source
 
-### Manage Agents
-1. Go to Agents page
-2. Click "Seed Agents" to add default OpenClaw agents
-3. View agent hierarchy and current status
-4. Agents auto-update to "busy" when assigned tasks
-
-### Track Activity
-- View global activity feed on Activity page
-- Filter by agent, task, or time period
-- See task state transitions, assignments, comments, etc.
-
-## Integration with OpenClaw
-
-### Agent Names
-The board recognizes standard OpenClaw agents:
-- `worker-opus` - Heavy reasoning tasks
-- `worker-heavy` - Complex coding/analysis
-- `worker-light` - Quick tasks
-- `worker-research` - Web research
-- `worker-desktop` - UI automation
-- `worker-code` - Code-specific tasks
-
-### File Storage Philosophy
-Like OpenClaw's memory system:
-- Human-readable files (can edit tasks in any text editor)
-- Git-friendly (version control, diffs, blame)
-- No database dependencies
-- Easy backup and portability
-
-## Development
-
-### Run Tests
-```bash
-npm test
-```
-
-### Lint Code
-```bash
-npm run lint
-```
-
-### Project Structure
-```
-src/
-├── app/                  # Next.js app router pages
-├── components/           # React components
-│   ├── board/           # Kanban board components
-│   ├── agents/          # Agent management
-│   └── ui/              # shadcn/ui components
-├── lib/                 # Core logic
-│   ├── storage.ts       # File-based storage
-│   ├── task-store.ts    # Task operations
-│   ├── agent-store.ts   # Agent operations
-│   └── types.ts         # TypeScript definitions
-└── __tests__/           # Test files
-```
-
-## Customization
-
-### Add Custom Statuses
-1. Update `TaskStatus` type in `src/lib/types.ts`
-2. Add to `TASK_STATUSES` array
-3. Update `VALID_TRANSITIONS` mapping
-4. Add column title in `COLUMN_TITLES`
-
-### Add Custom Fields
-1. Update `Task` interface in `src/lib/types.ts`
-2. Modify task forms in components
-3. Update storage serialization if needed
-
-### Custom Agent Types
-1. Update `DEFAULT_AGENTS` in `src/lib/types.ts`
-2. Add custom capabilities and roles
-3. Update agent display logic
-
-The Agent Board grows with your workflow needs while maintaining the simplicity and transparency of file-based storage.
+- Repo: https://github.com/jagjerez-org/agent-board
+- Local: /tmp/agent-board
+- Storage: /tmp/agent-board/data/ (markdown + YAML frontmatter)

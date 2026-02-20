@@ -29,7 +29,8 @@ export type TaskStatus =
   | 'todo' 
   | 'in_progress' 
   | 'review' 
-  | 'done';
+  | 'done'
+  | 'production';
 
 export type Priority = 'critical' | 'high' | 'medium' | 'low';
 
@@ -104,14 +105,16 @@ export interface TaskIndex {
 }
 
 // Valid state transitions
+// Forward flow + can always go back to backlog or refinement
 export const VALID_TRANSITIONS: Record<TaskStatus, TaskStatus[]> = {
-  backlog: ['refinement'],
+  backlog: ['refinement', 'todo'],
   refinement: ['pending_approval', 'backlog'],
-  pending_approval: ['todo', 'refinement'],
-  todo: ['in_progress', 'backlog'],
-  in_progress: ['review', 'backlog'],
+  pending_approval: ['todo', 'refinement', 'backlog'],
+  todo: ['in_progress', 'refinement', 'backlog'],
+  in_progress: ['review', 'refinement', 'backlog'],
   review: ['done', 'refinement', 'backlog'],
-  done: ['backlog'], // can reopen
+  done: ['production', 'backlog'],
+  production: ['backlog'],
 };
 
 export const TASK_STATUSES: TaskStatus[] = [
@@ -121,7 +124,8 @@ export const TASK_STATUSES: TaskStatus[] = [
   'todo',
   'in_progress',
   'review',
-  'done'
+  'done',
+  'production'
 ];
 
 export const PRIORITIES: Priority[] = ['critical', 'high', 'medium', 'low'];

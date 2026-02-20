@@ -306,7 +306,8 @@ export async function getTasksByStatus(projectFilter?: string): Promise<Record<T
     todo: [],
     in_progress: [],
     review: [],
-    done: []
+    done: [],
+    production: []
   };
 
   allTasks.forEach(task => {

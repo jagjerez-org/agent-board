@@ -20,6 +20,7 @@ const COLUMN_CONFIG: Record<TaskStatus, { icon: string; label: string }> = {
   in_progress: { icon: '🏃', label: 'In Progress' },
   review: { icon: '👀', label: 'Review' },
   done: { icon: '✅', label: 'Done' },
+  production: { icon: '🚀', label: 'Production' },
 };
 
 interface KanbanBoardProps {
@@ -43,6 +44,9 @@ export function KanbanBoard({ projectId, onCreateRef }: KanbanBoardProps = {}) {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [defaultStatus, setDefaultStatus] = useState<TaskStatus>('backlog');
 
+  // Execution state — track which tasks are being worked on by agents
+  const [executingTasks, setExecutingTasks] = useState<Set<string>>(new Set());
+
   const dragCounters = useRef<Record<string, number>>({});
 
   const loadTasks = useCallback(() => {
@@ -56,6 +60,37 @@ export function KanbanBoard({ projectId, onCreateRef }: KanbanBoardProps = {}) {
   }, [projectId]);
 
   useEffect(() => { loadTasks(); }, [loadTasks]);
+
+  // Poll execution status for in_progress tasks
+  useEffect(() => {
+    const checkExecutions = () => {
+      const inProgressTasks = tasksByStatus['in_progress'] || [];
+      inProgressTasks.forEach(async (task) => {
+        try {
+          const res = await fetch(`/api/tasks/${task.id}/execute`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.status === 'pending' || data.status === 'spawned' || data.status === 'running') {
+              setExecutingTasks(prev => new Set(prev).add(task.id));
+            } else if (data.status === 'done') {
+              // Auto-move to review when execution completes
+              setExecutingTasks(prev => { const n = new Set(prev); n.delete(task.id); return n; });
+              fetch(`/api/tasks/${task.id}/move`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: 'review' }),
+              }).then(() => loadTasks()).catch(() => {});
+            } else {
+              setExecutingTasks(prev => { const n = new Set(prev); n.delete(task.id); return n; });
+            }
+          }
+        } catch { /* ignore */ }
+      });
+    };
+    checkExecutions();
+    const interval = setInterval(checkExecutions, 10000);
+    return () => clearInterval(interval);
+  }, [tasksByStatus]);
 
   const handleEvent = useCallback((event: BoardEvent) => {
     if (event.type === 'connected') { setConnected(true); return; }
@@ -151,6 +186,15 @@ export function KanbanBoard({ projectId, onCreateRef }: KanbanBoardProps = {}) {
         const err = await res.json().catch(() => ({}));
         alert(err.error || 'Failed to move task');
         loadTasks(); // revert
+      } else if (targetStatus === 'refinement') {
+        // Auto-trigger refinement when task is moved to Refinement column
+        fetch(`/api/tasks/${taskId}/refine`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        }).then(r => {
+          if (!r.ok) console.warn('Auto-refine trigger failed:', r.status);
+        }).catch(() => console.warn('Auto-refine trigger failed'));
       }
     } catch {
       alert('Failed to move task');
@@ -232,15 +276,24 @@ export function KanbanBoard({ projectId, onCreateRef }: KanbanBoardProps = {}) {
                   <div
                     key={task.id}
                     id={`task-${task.id}`}
-                    draggable
-                    onDragStart={(e) => onDragStart(e, task.id)}
+                    draggable={!executingTasks.has(task.id)}
+                    onDragStart={(e) => { if (executingTasks.has(task.id)) { e.preventDefault(); return; } onDragStart(e, task.id); }}
                     onDragEnd={onDragEnd}
                     onClick={() => openEdit(task.id)}
-                    className={`bg-card border rounded-md p-3 shadow-sm hover:shadow-md transition-all cursor-grab active:cursor-grabbing select-none ${
-                      dragTaskId === task.id ? 'ring-2 ring-primary' : ''
-                    }`}
+                    className={`bg-card border rounded-md p-3 shadow-sm hover:shadow-md transition-all select-none ${
+                      executingTasks.has(task.id) ? 'cursor-not-allowed border-blue-500/50 bg-blue-500/5' : 'cursor-grab active:cursor-grabbing'
+                    } ${dragTaskId === task.id ? 'ring-2 ring-primary' : ''}`}
                   >
                     <p className="text-sm font-medium">{task.title}</p>
+                    {executingTasks.has(task.id) && (
+                      <p className="text-xs text-blue-400 animate-pulse mt-1">🔒 Agent working...</p>
+                    )}
+                    {task.status === 'refinement' && task.refinement?.includes('⏳') && (
+                      <p className="text-xs text-yellow-500 animate-pulse mt-1">🤖 Agent refining...</p>
+                    )}
+                    {task.status === 'refinement' && !task.refinement?.includes('⏳') && !task.refinement && (
+                      <p className="text-xs text-muted-foreground mt-1">Awaiting refinement</p>
+                    )}
                     <div className="flex items-center gap-1 mt-1.5 flex-wrap">
                       {task.priority && (
                         <span className={`text-xs px-1.5 py-0.5 rounded ${

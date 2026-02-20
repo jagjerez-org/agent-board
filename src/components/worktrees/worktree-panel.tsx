@@ -121,18 +121,73 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
     });
   };
   
-  // Per-worktree logs
+  // Multi-console per worktree
+  interface ConsoleTab {
+    id: string;
+    branch: string;
+    label: string;
+    command?: string; // last run command
+  }
+  const [consoleTabs, setConsoleTabs] = useState<Map<string, ConsoleTab[]>>(new Map()); // branch -> tabs
+  const [activeConsoleTab, setActiveConsoleTab] = useState<Map<string, string>>(new Map()); // branch -> active tab id
+  const nextConsoleId = useRef(1);
+
+  const getOrCreateConsoles = (branch: string): ConsoleTab[] => {
+    return consoleTabs.get(branch) || [];
+  };
+
+  const addConsoleTab = (branch: string) => {
+    const id = `console-${nextConsoleId.current++}`;
+    const tabs = getOrCreateConsoles(branch);
+    const newTab: ConsoleTab = { id, branch, label: `Console ${tabs.length + 1}` };
+    setConsoleTabs(prev => {
+      const n = new Map(prev);
+      n.set(branch, [...(n.get(branch) || []), newTab]);
+      return n;
+    });
+    setActiveConsoleTab(prev => { const n = new Map(prev); n.set(branch, id); return n; });
+    // Subscribe to logs for this console
+    const logKey = `${branch}:${id}`;
+    subscribeLogs(branch, id);
+    return id;
+  };
+
+  const removeConsoleTab = (branch: string, tabId: string) => {
+    setConsoleTabs(prev => {
+      const n = new Map(prev);
+      const tabs = (n.get(branch) || []).filter(t => t.id !== tabId);
+      n.set(branch, tabs);
+      return n;
+    });
+    unsubscribeLogs(branch, tabId);
+    // Kill process for that console
+    killProcess(branch, tabId);
+    // Switch to another tab
+    setActiveConsoleTab(prev => {
+      const n = new Map(prev);
+      if (n.get(branch) === tabId) {
+        const remaining = (consoleTabs.get(branch) || []).filter(t => t.id !== tabId);
+        n.set(branch, remaining.length > 0 ? remaining[0].id : '');
+      }
+      return n;
+    });
+    // Clear logs
+    setLogs(prev => { const n = new Map(prev); n.delete(`${branch}:${tabId}`); return n; });
+  };
+
+  // Per-worktree logs (keyed by branch:consoleId)
   const [logs, setLogs] = useState<Map<string, LogEntry[]>>(new Map());
   const [autoScroll, setAutoScroll] = useState(true);
   const logRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const eventSourceRefs = useRef<Map<string, EventSource>>(new Map());
   const iframeRefs = useRef<Map<string, HTMLIFrameElement>>(new Map());
   
-  // Per-worktree command input
+  // Per-console command input (keyed by branch:consoleId)
   const [commandInputs, setCommandInputs] = useState<Map<string, string>>(new Map());
   const [runningCommands, setRunningCommands] = useState<Set<string>>(new Set());
   const [startingServers, setStartingServers] = useState<Set<string>>(new Set());
   const [stoppingServers, setStoppingServers] = useState<Set<string>>(new Set());
+  const [killingProcesses, setKillingProcesses] = useState<Set<string>>(new Set());
   
   // Create worktree dialog state
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -233,34 +288,36 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
     return () => clearInterval(interval);
   }, [selectedProject]);
 
-  // SSE log subscription per branch
-  const subscribeLogs = useCallback((branch: string) => {
-    if (eventSourceRefs.current.has(branch)) return;
-    const url = `/api/git/worktrees/logs?project=${encodeURIComponent(selectedProject)}&branch=${encodeURIComponent(branch)}`;
+  // SSE log subscription per branch:consoleId
+  const subscribeLogs = useCallback((branch: string, consoleId?: string) => {
+    const key = consoleId ? `${branch}:${consoleId}` : branch;
+    if (eventSourceRefs.current.has(key)) return;
+    const url = `/api/git/worktrees/logs?project=${encodeURIComponent(selectedProject)}&branch=${encodeURIComponent(branch)}${consoleId ? `&consoleId=${encodeURIComponent(consoleId)}` : ''}`;
     const es = new EventSource(url);
-    eventSourceRefs.current.set(branch, es);
+    eventSourceRefs.current.set(key, es);
     
     es.onmessage = (event) => {
       try {
         const entry: LogEntry = JSON.parse(event.data);
         setLogs(prev => {
           const updated = new Map(prev);
-          const entries = [...(updated.get(branch) || []), entry];
+          const entries = [...(updated.get(key) || []), entry];
           if (entries.length > 1000) entries.shift();
-          updated.set(branch, entries);
+          updated.set(key, entries);
           return updated;
         });
       } catch { /* ignore */ }
     };
     es.onerror = () => {
       es.close();
-      eventSourceRefs.current.delete(branch);
+      eventSourceRefs.current.delete(key);
     };
   }, [selectedProject]);
 
-  const unsubscribeLogs = useCallback((branch: string) => {
-    const es = eventSourceRefs.current.get(branch);
-    if (es) { es.close(); eventSourceRefs.current.delete(branch); }
+  const unsubscribeLogs = useCallback((branch: string, consoleId?: string) => {
+    const key = consoleId ? `${branch}:${consoleId}` : branch;
+    const es = eventSourceRefs.current.get(key);
+    if (es) { es.close(); eventSourceRefs.current.delete(key); }
   }, []);
 
   // Subscribe/unsubscribe logs when panels expand/collapse
@@ -277,10 +334,19 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
       const next = new Set(prev);
       if (next.has(branch)) {
         next.delete(branch);
-        unsubscribeLogs(branch);
+        // Unsubscribe all console SSE for this branch
+        const tabs = consoleTabs.get(branch) || [];
+        tabs.forEach(t => unsubscribeLogs(branch, t.id));
       } else {
         next.add(branch);
-        subscribeLogs(branch);
+        // Create first console tab if none exist
+        if (!consoleTabs.get(branch)?.length) {
+          addConsoleTab(branch);
+        } else {
+          // Re-subscribe existing tabs
+          const tabs = consoleTabs.get(branch) || [];
+          tabs.forEach(t => subscribeLogs(branch, t.id));
+        }
       }
       return next;
     });
@@ -359,37 +425,51 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
     finally { setStoppingServers(prev => { const n = new Set(prev); n.delete(branch); return n; }); }
   };
 
-  // Run command in worktree
-  const runCommand = async (branch: string) => {
-    const cmd = commandInputs.get(branch)?.trim();
+  // Run command in worktree console
+  const runCommand = async (branch: string, consoleId?: string) => {
+    const inputKey = consoleId ? `${branch}:${consoleId}` : branch;
+    const cmd = commandInputs.get(inputKey)?.trim();
     if (!cmd) return;
-    const key = `${branch}:${cmd}`;
+    const key = `${branch}:${cmd}:${consoleId || ''}`;
     setRunningCommands(prev => new Set([...prev, key]));
     try {
       await fetch('/api/git/worktrees/logs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ project: selectedProject, branch, command: cmd }),
+        body: JSON.stringify({ project: selectedProject, branch, command: cmd, consoleId }),
       });
-      setCommandInputs(prev => { const n = new Map(prev); n.set(branch, ''); return n; });
+      setCommandInputs(prev => { const n = new Map(prev); n.set(inputKey, ''); return n; });
+      // Update tab label with command
+      if (consoleId) {
+        setConsoleTabs(prev => {
+          const n = new Map(prev);
+          const tabs = (n.get(branch) || []).map(t => t.id === consoleId ? { ...t, command: cmd, label: cmd.length > 20 ? cmd.substring(0, 20) + '…' : cmd } : t);
+          n.set(branch, tabs);
+          return n;
+        });
+      }
       // Ensure logs panel is open
       if (!expandedLogs.has(branch)) toggleLogs(branch);
     } catch { alert('Failed to run command'); }
     finally { setRunningCommands(prev => { const n = new Set(prev); n.delete(key); return n; }); }
   };
 
-  const killProcess = async (branch: string) => {
+  const killProcess = async (branch: string, consoleId?: string) => {
+    const key = consoleId ? `${branch}:${consoleId}` : branch;
+    if (killingProcesses.has(key)) return;
+    setKillingProcesses(prev => new Set(prev).add(key));
     try {
       const res = await fetch('/api/git/worktrees/logs', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ project: selectedProject, branch }),
+        body: JSON.stringify({ project: selectedProject, branch, consoleId }),
       });
       if (!res.ok) {
-        const data = await res.json();
-        alert(data.error || 'Failed to kill process');
+        const data = await res.json().catch(() => ({}));
+        if (res.status !== 404) alert(data.error || 'Failed to kill process');
       }
     } catch { alert('Failed to kill process'); }
+    finally { setKillingProcesses(prev => { const n = new Set(prev); n.delete(key); return n; }); }
   };
 
   const createWorktree = async () => {
@@ -625,7 +705,6 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
                     const server = getServerForBranch(wt.branch);
                     const isPreviewOpen = expandedPreviews.has(wt.branch);
                     const isLogsOpen = expandedLogs.has(wt.branch);
-                    const branchLogs = logs.get(wt.branch) || [];
                     const branchInfo = branches.find(b => b.name === wt.branch);
                     
                     return (
@@ -778,45 +857,73 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
                             </div>
                           )}
 
-                          {/* Logs panel (expanded) */}
-                          {isLogsOpen && (
+                          {/* Multi-Console Logs panel (expanded) */}
+                          {isLogsOpen && (() => {
+                            const tabs = consoleTabs.get(wt.branch) || [];
+                            const activeTabId = activeConsoleTab.get(wt.branch) || tabs[0]?.id || '';
+                            const logKey = `${wt.branch}:${activeTabId}`;
+                            const tabLogs = logs.get(logKey) || [];
+                            const inputKey = `${wt.branch}:${activeTabId}`;
+
+                            return (
                             <div className="border rounded-lg overflow-hidden">
-                              <div className="flex items-center justify-between px-3 py-2 bg-muted/50 border-b">
-                                <span className="text-sm font-medium flex items-center gap-2">
-                                  <Terminal className="w-4 h-4" /> Logs & Commands
-                                </span>
-                                <div className="flex items-center gap-2">
+                              {/* Console tabs bar */}
+                              <div className="flex items-center bg-muted/50 border-b overflow-x-auto">
+                                <div className="flex items-center flex-1 min-w-0">
+                                  {tabs.map(tab => (
+                                    <button
+                                      key={tab.id}
+                                      onClick={() => setActiveConsoleTab(prev => { const n = new Map(prev); n.set(wt.branch, tab.id); return n; })}
+                                      className={cn(
+                                        "flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-r transition-colors whitespace-nowrap",
+                                        activeTabId === tab.id ? "bg-background text-foreground" : "text-muted-foreground hover:bg-muted/80"
+                                      )}
+                                    >
+                                      <Terminal className="w-3 h-3" />
+                                      {tab.label}
+                                      {tabs.length > 1 && (
+                                        <span
+                                          onClick={(e) => { e.stopPropagation(); removeConsoleTab(wt.branch, tab.id); }}
+                                          className="ml-1 hover:text-destructive cursor-pointer"
+                                        >×</span>
+                                      )}
+                                    </button>
+                                  ))}
+                                </div>
+                                <div className="flex items-center gap-1 px-2">
+                                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => addConsoleTab(wt.branch)} title="New console">
+                                    <Plus className="w-3 h-3" />
+                                  </Button>
                                   <div className="flex items-center gap-1">
                                     <Switch id={`auto-scroll-${wt.branch}`} checked={autoScroll} onCheckedChange={setAutoScroll} />
-                                    <Label htmlFor={`auto-scroll-${wt.branch}`} className="text-[10px]">Auto-scroll</Label>
+                                    <Label htmlFor={`auto-scroll-${wt.branch}`} className="text-[10px]">Auto</Label>
                                   </div>
-                                  <Button variant="ghost" size="sm" onClick={() => {
-                                    const entries = logs.get(wt.branch) || [];
-                                    navigator.clipboard.writeText(entries.map(e => stripAnsi(`${e.type}: ${e.message}`)).join('\n'));
-                                  }}>
+                                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => {
+                                    navigator.clipboard.writeText(tabLogs.map(e => stripAnsi(`${e.type}: ${e.message}`)).join('\n'));
+                                  }} title="Copy logs">
                                     <Copy className="w-3 h-3" />
                                   </Button>
-                                  <Button variant="ghost" size="sm" onClick={() => {
-                                    setLogs(prev => { const n = new Map(prev); n.set(wt.branch, []); return n; });
-                                  }}>
+                                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => {
+                                    setLogs(prev => { const n = new Map(prev); n.set(logKey, []); return n; });
+                                  }} title="Clear logs">
                                     <Trash2 className="w-3 h-3" />
                                   </Button>
                                 </div>
                               </div>
                               
-                              {/* Command input */}
+                              {/* Command input for active tab */}
                               <div className="flex gap-2 px-3 py-2 border-b bg-muted/30">
                                 <Input
-                                  value={commandInputs.get(wt.branch) || ''}
-                                  onChange={(e) => setCommandInputs(prev => { const n = new Map(prev); n.set(wt.branch, e.target.value); return n; })}
+                                  value={commandInputs.get(inputKey) || ''}
+                                  onChange={(e) => setCommandInputs(prev => { const n = new Map(prev); n.set(inputKey, e.target.value); return n; })}
                                   placeholder="Enter command..."
                                   className="flex-1 h-8 text-sm"
-                                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); runCommand(wt.branch); } }}
+                                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); runCommand(wt.branch, activeTabId); } }}
                                 />
-                                <Button size="sm" className="h-8" onClick={() => runCommand(wt.branch)} disabled={!commandInputs.get(wt.branch)?.trim()}>
+                                <Button size="sm" className="h-8" onClick={() => runCommand(wt.branch, activeTabId)} disabled={!commandInputs.get(inputKey)?.trim()}>
                                   <Play className="w-3 h-3" />
                                 </Button>
-                                <Button size="sm" variant="destructive" className="h-8" onClick={() => killProcess(wt.branch)} title="Kill running process">
+                                <Button size="sm" variant="destructive" className="h-8" onClick={() => killProcess(wt.branch, activeTabId)} disabled={killingProcesses.has(`${wt.branch}:${activeTabId}`)} title="Kill running process">
                                   <Square className="w-3 h-3" />
                                 </Button>
                               </div>
@@ -825,17 +932,23 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
                               <div className="flex flex-wrap gap-1 px-3 py-1.5 border-b bg-muted/20">
                                 {commonCommands.map(cmd => (
                                   <Button key={cmd} variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={() => {
-                                    setCommandInputs(prev => { const n = new Map(prev); n.set(wt.branch, cmd); return n; });
-                                    // Auto-run
+                                    setCommandInputs(prev => { const n = new Map(prev); n.set(inputKey, cmd); return n; });
                                     setTimeout(() => {
-                                      const key = `${wt.branch}:${cmd}`;
+                                      const key = `${wt.branch}:${cmd}:${activeTabId}`;
                                       setRunningCommands(prev => new Set([...prev, key]));
                                       fetch('/api/git/worktrees/logs', {
                                         method: 'POST',
                                         headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({ project: selectedProject, branch: wt.branch, command: cmd }),
+                                        body: JSON.stringify({ project: selectedProject, branch: wt.branch, command: cmd, consoleId: activeTabId }),
                                       }).finally(() => setRunningCommands(prev => { const n = new Set(prev); n.delete(key); return n; }));
-                                      setCommandInputs(prev => { const n = new Map(prev); n.set(wt.branch, ''); return n; });
+                                      setCommandInputs(prev => { const n = new Map(prev); n.set(inputKey, ''); return n; });
+                                      // Update tab label
+                                      setConsoleTabs(prev => {
+                                        const n = new Map(prev);
+                                        const tabs = (n.get(wt.branch) || []).map(t => t.id === activeTabId ? { ...t, command: cmd, label: cmd.length > 20 ? cmd.substring(0, 20) + '…' : cmd } : t);
+                                        n.set(wt.branch, tabs);
+                                        return n;
+                                      });
                                     }, 0);
                                   }}>
                                     {cmd}
@@ -843,15 +956,15 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
                                 ))}
                               </div>
                               
-                              {/* Log output */}
+                              {/* Log output for active tab */}
                               <div
-                                ref={(el) => { if (el) logRefs.current.set(wt.branch, el); }}
+                                ref={(el) => { if (el) logRefs.current.set(logKey, el); }}
                                 className="h-64 overflow-auto bg-[#0a0a0a] text-white p-3 font-mono text-xs"
                               >
-                                {branchLogs.length === 0 ? (
+                                {tabLogs.length === 0 ? (
                                   <div className="text-gray-500 italic">No logs yet. Run a command or start a preview server.</div>
                                 ) : (
-                                  branchLogs.map((entry, i) => (
+                                  tabLogs.map((entry, i) => (
                                     <div key={i} className="flex leading-5">
                                       <span className="text-gray-500 mr-2 flex-shrink-0">
                                         {new Date(entry.timestamp).toLocaleTimeString()}
@@ -879,7 +992,8 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
                                 )}
                               </div>
                             </div>
-                          )}
+                            );
+                          })()}
 
                           {/* Editor panel (expanded) */}
                           {expandedEditors.has(wt.branch) && (
