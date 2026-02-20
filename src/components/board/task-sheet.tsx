@@ -110,7 +110,12 @@ export function TaskSheet({ taskId, mode, open, onOpenChange, onSaved, defaultSt
   // Load branches when project changes
   useEffect(() => {
     if (projectId && open) {
-      fetch(`/api/git/branches?project=${encodeURIComponent(projectId)}`)
+      // Find the project to get repo owner/name for branch lookup
+      const proj = projects.find(p => p.id === projectId);
+      const branchProjectId = proj?.repo_owner && proj?.repo_name 
+        ? `${proj.repo_owner}/${proj.repo_name}`
+        : projectId;
+      fetch(`/api/git/branches?project=${encodeURIComponent(branchProjectId)}`)
         .then(r => r.json())
         .then(data => {
           if (data.branches) {
@@ -121,7 +126,7 @@ export function TaskSheet({ taskId, mode, open, onOpenChange, onSaved, defaultSt
     } else {
       setBranches([]);
     }
-  }, [projectId, open]);
+  }, [projectId, open, projects]);
 
   // Check worktree status when branch changes
   useEffect(() => {
