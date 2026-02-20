@@ -346,13 +346,13 @@ export async function POST(request: NextRequest) {
       `${homeDir}/.local/bin`,
       '/usr/local/bin',
     ].join(':');
-    const env = { ...process.env, PATH: `${extraPaths}:${process.env.PATH}` };
+    const env = { ...process.env, NODE_ENV: 'development', PATH: `${extraPaths}:${process.env.PATH}` };
     
     // Spawn the command
     const childProcess = spawn('bash', ['-c', command], {
       cwd: worktree.path,
       stdio: ['ignore', 'pipe', 'pipe'],
-      env
+      env: env as NodeJS.ProcessEnv
     });
     
     if (!childProcess.pid) {

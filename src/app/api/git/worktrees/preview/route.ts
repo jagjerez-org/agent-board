@@ -53,18 +53,18 @@ async function isProcessRunning(pid: number): Promise<boolean> {
 async function findAvailablePort(startPort: number = 3200): Promise<number> {
   const servers = await loadServers();
   const usedPorts = new Set();
-  
+
   Object.values(servers).flat().forEach(server => {
     if (server.status === 'running' || server.status === 'starting') {
       usedPorts.add(server.port);
     }
   });
-  
+
   let port = startPort;
   while (usedPorts.has(port)) {
     port++;
   }
-  
+
   return port;
 }
 
@@ -72,7 +72,7 @@ async function findAvailablePort(startPort: number = 3200): Promise<number> {
 async function updateServerStatus(project: string, branch: string, updates: Partial<PreviewServer>) {
   const servers = await loadServers();
   if (!servers[project]) servers[project] = [];
-  
+
   const serverIndex = servers[project].findIndex(s => s.branch === branch);
   if (serverIndex >= 0) {
     servers[project][serverIndex] = { ...servers[project][serverIndex], ...updates };
@@ -84,7 +84,7 @@ async function updateServerStatus(project: string, branch: string, updates: Part
 async function cleanupStaleServers() {
   const servers = await loadServers();
   let hasChanges = false;
-  
+
   for (const project in servers) {
     servers[project] = await Promise.all(
       servers[project].map(async (server) => {
@@ -99,7 +99,7 @@ async function cleanupStaleServers() {
       })
     );
   }
-  
+
   if (hasChanges) {
     await saveServers(servers);
   }
@@ -110,19 +110,19 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const rawProject = searchParams.get('project');
-    
+
     if (!rawProject) {
       return NextResponse.json(
         { error: 'Project parameter is required' },
         { status: 400 }
       );
     }
-    
+
     const project = await resolveProjectId(rawProject);
     await cleanupStaleServers();
     const servers = await loadServers();
     const projectServers = servers[project] || [];
-    
+
     return NextResponse.json({ servers: projectServers });
   } catch (error) {
     console.error('Error in GET /api/git/worktrees/preview:', error);
@@ -138,16 +138,16 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { project: rawProject, branch, command = 'pnpm dev', port: requestedPort } = body;
-    
+
     if (!rawProject || !branch) {
       return NextResponse.json(
         { error: 'Project and branch parameters are required' },
         { status: 400 }
       );
     }
-    
+
     const project = await resolveProjectId(rawProject);
-    
+
     // Get repository path
     const repoPath = await getRepoPath(project);
     if (!repoPath) {
@@ -156,7 +156,7 @@ export async function POST(request: NextRequest) {
         { status: 404 }
       );
     }
-    
+
     // Get worktree for branch
     const worktree = await getWorktreeForBranch(repoPath, branch);
     if (!worktree) {
@@ -165,12 +165,12 @@ export async function POST(request: NextRequest) {
         { status: 404 }
       );
     }
-    
+
     // Check if server is already running
     await cleanupStaleServers();
     const servers = await loadServers();
     if (!servers[project]) servers[project] = [];
-    
+
     const existingServer = servers[project].find(s => s.branch === branch);
     if (existingServer && (existingServer.status === 'running' || existingServer.status === 'starting')) {
       return NextResponse.json(
@@ -178,10 +178,10 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    
+
     // Find available port
     const port = requestedPort || await findAvailablePort();
-    
+
     // Set up environment with the specified port
     // Extend PATH with common tool locations
     const homeDir = process.env.HOME || '/root';
@@ -192,23 +192,23 @@ export async function POST(request: NextRequest) {
       `${homeDir}/.local/bin`,
       '/usr/local/bin',
     ].join(':');
-    const env = { ...process.env, PORT: port.toString(), HOST: '0.0.0.0', PATH: `${extraPaths}:${process.env.PATH}` };
-    
+    const env = { ...process.env, PORT: port.toString(), HOST: '0.0.0.0', NODE_ENV: 'development', PATH: `${extraPaths}:${process.env.PATH}` };
+
     // Spawn the dev server process
     const childProcess = spawn('bash', ['-c', command], {
       cwd: worktree.path,
       detached: true,
       stdio: ['ignore', 'pipe', 'pipe'],
-      env
+      env: env as NodeJS.ProcessEnv
     });
-    
+
     if (!childProcess.pid) {
       return NextResponse.json(
         { error: 'Failed to spawn preview server process' },
         { status: 500 }
       );
     }
-    
+
     // Create server entry
     const server: PreviewServer = {
       branch,
@@ -219,15 +219,15 @@ export async function POST(request: NextRequest) {
       command,
       project
     };
-    
+
     // Remove existing server if any and add new one
     servers[project] = servers[project].filter(s => s.branch !== branch);
     servers[project].push(server);
     await saveServers(servers);
-    
+
     // Set up process event handlers
     let hasStarted = false;
-    
+
     // Monitor output for startup success
     childProcess.stdout?.on('data', (data) => {
       const output = data.toString();
@@ -236,33 +236,33 @@ export async function POST(request: NextRequest) {
         updateServerStatus(project, branch, { status: 'running' });
       }
     });
-    
+
     childProcess.stderr?.on('data', (data) => {
       const output = data.toString();
       console.error(`Preview server stderr [${branch}]:`, output);
-      
+
       if (!hasStarted && output.includes('Error')) {
         updateServerStatus(project, branch, { status: 'error' });
       }
     });
-    
+
     childProcess.on('exit', (code) => {
       console.log(`Preview server exited [${branch}] with code:`, code);
       updateServerStatus(project, branch, { status: 'stopped' });
     });
-    
+
     childProcess.on('error', (error) => {
       console.error(`Preview server error [${branch}]:`, error);
       updateServerStatus(project, branch, { status: 'error' });
     });
-    
+
     // Mark as running after a short delay if no errors
     setTimeout(() => {
       if (!hasStarted) {
         updateServerStatus(project, branch, { status: 'running' });
       }
     }, 3000);
-    
+
     return NextResponse.json({
       success: true,
       server: {
@@ -287,14 +287,14 @@ export async function DELETE(request: NextRequest) {
   try {
     const body = await request.json();
     const { project: rawProject2, branch } = body;
-    
+
     if (!rawProject2 || !branch) {
       return NextResponse.json(
         { error: 'Project and branch parameters are required' },
         { status: 400 }
       );
     }
-    
+
     const project = await resolveProjectId(rawProject2);
     const servers = await loadServers();
     if (!servers[project]) {
@@ -303,7 +303,7 @@ export async function DELETE(request: NextRequest) {
         { status: 404 }
       );
     }
-    
+
     const server = servers[project].find(s => s.branch === branch);
     if (!server) {
       return NextResponse.json(
@@ -311,7 +311,7 @@ export async function DELETE(request: NextRequest) {
         { status: 404 }
       );
     }
-    
+
     // Kill the process
     if (server.status === 'running' || server.status === 'starting') {
       try {
@@ -327,11 +327,11 @@ export async function DELETE(request: NextRequest) {
         }
       }
     }
-    
+
     // Update server status
     server.status = 'stopped';
     await saveServers(servers);
-    
+
     return NextResponse.json({
       success: true,
       message: `Preview server stopped for branch: ${branch}`

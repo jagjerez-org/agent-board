@@ -12,11 +12,22 @@
     {
       "branch": "feat/week20260220",
       "port": 3200,
-      "pid": 4118241,
+      "pid": 4155320,
       "status": "running",
-      "startedAt": "2026-02-20T11:13:36.979Z",
-      "command": "cd apps/ala_app && flutter run -d web-server --web-port=3200",
+      "startedAt": "2026-02-20T11:35:45.143Z",
+      "command": "cd apps/ala_app && flutter run -d web-server --web-hostname=0.0.0.0 --web-port=3200",
       "project": "educabrera1997/ALA APP"
+    }
+  ],
+  "hubdance/kadens": [
+    {
+      "branch": "feat/review_kadens_jgodoy_20260220",
+      "port": 3201,
+      "pid": 4159111,
+      "status": "stopped",
+      "startedAt": "2026-02-20T11:37:56.556Z",
+      "command": "cd apps/api && npm run dev",
+      "project": "hubdance/kadens"
     }
   ]
 }
