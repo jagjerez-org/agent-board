@@ -73,7 +73,8 @@ export async function listWorktrees(repoPath: string): Promise<Worktree[]> {
 export async function addWorktree(
   repoPath: string, 
   branch: string, 
-  createBranch: boolean = false
+  createBranch: boolean = false,
+  baseBranch?: string
 ): Promise<{ success: boolean; path?: string; error?: string }> {
   try {
     // Sanitize branch name for directory
@@ -86,7 +87,8 @@ export async function addWorktree(
     
     let command: string;
     if (createBranch) {
-      command = `git worktree add -b "${branch}" "${worktreePath}"`;
+      const base = baseBranch ? `"${baseBranch}"` : '';
+      command = `git worktree add -b "${branch}" "${worktreePath}" ${base}`.trim();
     } else {
       command = `git worktree add "${worktreePath}" "${branch}"`;
     }

@@ -74,6 +74,7 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
   const [newBranch, setNewBranch] = useState('');
   const [createNewBranch, setCreateNewBranch] = useState(false);
   const [selectedBranch, setSelectedBranch] = useState('');
+  const [baseBranch, setBaseBranch] = useState('main');
 
   // Load projects
   useEffect(() => {
@@ -143,7 +144,8 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
         body: JSON.stringify({
           project: getRepoProjectId(selectedProject),
           branch: branch,
-          createBranch: createNewBranch
+          createBranch: createNewBranch,
+          baseBranch: createNewBranch ? baseBranch : undefined
         })
       });
 
@@ -277,14 +279,34 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
                       </div>
                       
                       {createNewBranch ? (
-                        <div>
-                          <label className="text-sm font-medium">New Branch Name</label>
-                          <Input
-                            placeholder="feature/new-feature"
-                            value={newBranch}
-                            onChange={(e) => setNewBranch(e.target.value)}
-                          />
-                        </div>
+                        <>
+                          <div>
+                            <label className="text-sm font-medium">New Branch Name</label>
+                            <Input
+                              placeholder="feature/new-feature"
+                              value={newBranch}
+                              onChange={(e) => setNewBranch(e.target.value)}
+                            />
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium">Base Branch (create from)</label>
+                            <Select value={baseBranch} onValueChange={setBaseBranch}>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select base branch..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {branches.map((branch) => (
+                                  <SelectItem key={branch.name} value={branch.name}>
+                                    <div className="flex items-center gap-2">
+                                      <GitBranch className="w-4 h-4" />
+                                      {branch.name}
+                                    </div>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </>
                       ) : (
                         <div>
                           <label className="text-sm font-medium">Existing Branch</label>

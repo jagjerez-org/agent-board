@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { project: rawProject, branch, createBranch = false } = body;
+    const { project: rawProject, branch, createBranch = false, baseBranch } = body;
     
     if (!rawProject || !branch) {
       return NextResponse.json(
@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    const result = await addWorktree(repoPath, branch, createBranch);
+    const result = await addWorktree(repoPath, branch, createBranch, baseBranch);
     
     if (result.success) {
       return NextResponse.json({ 
