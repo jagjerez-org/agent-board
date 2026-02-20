@@ -135,6 +135,8 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
   const [projectOpen, setProjectOpen] = useState(false);
   const [loadingBranches, setLoadingBranches] = useState(false);
   const [previewDialog, setPreviewDialog] = useState<{ open: boolean; branch: string; command: string; cwd: string }>({ open: false, branch: '', command: '', cwd: '' });
+  const [deleteBranchConfirm, setDeleteBranchConfirm] = useState<{ open: boolean; branch: string; isLocal: boolean; isRemote: boolean }>({ open: false, branch: '', isLocal: false, isRemote: false });
+  const [deletingBranch, setDeletingBranch] = useState(false);
 
   // Resolve project ID to repo-style path
   const getRepoProjectId = useCallback((pid: string) => {
@@ -843,6 +845,16 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
                             Worktree
                           </Button>
                         )}
+                        {!b.hasWorktree && !b.isCurrent && !['main','master','develop','dev'].includes(b.name) && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-xs text-destructive hover:text-destructive"
+                            onClick={() => setDeleteBranchConfirm({ open: true, branch: b.name, isLocal: b.isLocal, isRemote: b.isRemote })}
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -918,6 +930,51 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
               startPreview(branch, cwd ? `cd ${cwd} && ${command}` : command);
             }} disabled={!previewDialog.command.trim()}>
               <Play className="w-3 h-3 mr-1" /> Start
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Branch Confirmation */}
+      <Dialog open={deleteBranchConfirm.open} onOpenChange={(open) => { if (!open) setDeleteBranchConfirm(p => ({ ...p, open: false })); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Branch</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete <strong>{deleteBranchConfirm.branch}</strong>? This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2 space-y-2 text-sm">
+            {deleteBranchConfirm.isLocal && <div className="flex items-center gap-2"><Badge variant="secondary" className="text-[10px]">local</Badge> Will delete local branch</div>}
+            {deleteBranchConfirm.isRemote && <div className="flex items-center gap-2"><Badge variant="outline" className="text-[10px]">remote</Badge> Will delete from origin</div>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteBranchConfirm(p => ({ ...p, open: false }))}>Cancel</Button>
+            <Button variant="destructive" disabled={deletingBranch} onClick={async () => {
+              setDeletingBranch(true);
+              try {
+                const res = await fetch('/api/git/branches', {
+                  method: 'DELETE',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    project: selectedProject,
+                    branch: deleteBranchConfirm.branch,
+                    deleteLocal: deleteBranchConfirm.isLocal,
+                    deleteRemote: deleteBranchConfirm.isRemote,
+                  }),
+                });
+                const data = await res.json();
+                if (data.success) {
+                  setDeleteBranchConfirm(p => ({ ...p, open: false }));
+                  loadProjectData();
+                } else {
+                  alert(data.error || data.errors?.join(', ') || 'Failed to delete branch');
+                }
+              } catch { alert('Failed to delete branch'); }
+              setDeletingBranch(false);
+            }}>
+              {deletingBranch ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Trash2 className="w-3 h-3 mr-1" />}
+              Delete
             </Button>
           </DialogFooter>
         </DialogContent>

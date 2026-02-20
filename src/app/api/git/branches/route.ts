@@ -176,3 +176,75 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+
+// DELETE /api/git/branches - Delete a branch (local + remote)
+export async function DELETE(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { project: rawProject, branch, deleteLocal = true, deleteRemote = true } = body;
+
+    if (!rawProject || !branch) {
+      return NextResponse.json({ error: 'project and branch required' }, { status: 400 });
+    }
+
+    const project = await resolveProjectId(rawProject);
+    const repoPath = await getRepoPath(project);
+    if (!repoPath) {
+      return NextResponse.json({ error: `Repository not found for project: ${project}` }, { status: 404 });
+    }
+
+    // Safety: don't delete main/master/develop
+    const protected_branches = ['main', 'master', 'develop', 'dev'];
+    if (protected_branches.includes(branch)) {
+      return NextResponse.json({ error: `Cannot delete protected branch: ${branch}` }, { status: 400 });
+    }
+
+    // Check if branch has a worktree — can't delete if so
+    try {
+      const { stdout } = await execAsync('git worktree list --porcelain', { cwd: repoPath });
+      if (stdout.includes(`branch refs/heads/${branch}`)) {
+        return NextResponse.json({ error: `Branch '${branch}' has an active worktree. Remove the worktree first.` }, { status: 400 });
+      }
+    } catch { /* ignore */ }
+
+    const results: string[] = [];
+    const errors: string[] = [];
+
+    // Delete local branch
+    if (deleteLocal) {
+      try {
+        await execAsync(`git branch -D "${branch}"`, { cwd: repoPath });
+        results.push(`Deleted local branch '${branch}'`);
+      } catch (e: any) {
+        if (e.stderr?.includes('not found')) {
+          results.push(`Local branch '${branch}' not found (skipped)`);
+        } else {
+          errors.push(`Failed to delete local: ${e.stderr || e.message}`);
+        }
+      }
+    }
+
+    // Delete remote branch
+    if (deleteRemote) {
+      try {
+        await execAsync(`git push origin --delete "${branch}"`, { cwd: repoPath });
+        results.push(`Deleted remote branch 'origin/${branch}'`);
+      } catch (e: any) {
+        if (e.stderr?.includes('remote ref does not exist')) {
+          results.push(`Remote branch '${branch}' not found (skipped)`);
+        } else {
+          errors.push(`Failed to delete remote: ${e.stderr || e.message}`);
+        }
+      }
+    }
+
+    return NextResponse.json({
+      success: errors.length === 0,
+      results,
+      errors,
+    });
+  } catch (error) {
+    console.error('Error in DELETE /api/git/branches:', error);
+    return NextResponse.json({ error: 'Failed to delete branch' }, { status: 500 });
+  }
+}
