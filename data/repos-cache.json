@@ -11,7 +11,20 @@
       "is_private": false,
       "provider": "GitHub - Jarvis",
       "owner": "jagjerez-org",
-      "updated_at": "2026-02-20T13:23:27Z"
+      "updated_at": "2026-02-20T14:29:58Z"
+    },
+    {
+      "id": "AmericanLanguage-IT/Aula",
+      "name": "Aula",
+      "full_name": "AmericanLanguage-IT/Aula",
+      "description": "Git version control for //curso-ingles//",
+      "url": "https://gitlab.com/AmericanLanguage-IT/aula",
+      "clone_url": "git@gitlab.com:AmericanLanguage-IT/aula.git",
+      "default_branch": "master",
+      "is_private": true,
+      "provider": "GitLab",
+      "owner": "AmericanLanguage-IT",
+      "updated_at": "2026-02-20T14:13:14.830Z"
     },
     {
       "id": "educabrera1997/ALA APP",
@@ -142,19 +155,6 @@
       "provider": "GitHub - Jarvis",
       "owner": "jagjerez-org",
       "updated_at": "2026-02-15T11:01:15Z"
-    },
-    {
-      "id": "AmericanLanguage-IT/Aula",
-      "name": "Aula",
-      "full_name": "AmericanLanguage-IT/Aula",
-      "description": "Git version control for //curso-ingles//",
-      "url": "https://gitlab.com/AmericanLanguage-IT/aula",
-      "clone_url": "git@gitlab.com:AmericanLanguage-IT/aula.git",
-      "default_branch": "master",
-      "is_private": true,
-      "provider": "GitLab",
-      "owner": "AmericanLanguage-IT",
-      "updated_at": "2026-02-04T17:50:26.709Z"
     },
     {
       "id": "AmericanLanguage-IT/Americanlanguage",
@@ -586,5 +586,5 @@
       "updated_at": "2022-05-16T06:29:09.558Z"
     }
   ],
-  "last_updated": "2026-02-20T13:32:56.885Z"
+  "last_updated": "2026-02-20T14:31:14.642Z"
 }
