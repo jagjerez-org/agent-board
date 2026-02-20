@@ -2,53 +2,28 @@
 
 import React, { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Editor, type Monaco } from '@monaco-editor/react';
+import { Editor, DiffEditor, type Monaco } from '@monaco-editor/react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
 import {
-  Folder,
-  FolderOpen,
-  File,
-  X,
-  Save,
-  Loader2,
-  ChevronRight,
-  ChevronDown,
-  FileText,
-  Code,
-  Database,
-  Settings,
-  Image,
-  Archive,
-  AlertCircle,
-  Dot,
-  FolderPlus,
-  FilePlus,
-  RefreshCw,
+  Folder, FolderOpen, File, X, Save, Loader2, ChevronRight, ChevronDown,
+  FileText, Code, Database, Settings, Image, Archive, AlertCircle, Dot,
+  FolderPlus, FilePlus, RefreshCw, GitBranch, Plus, Minus, Edit3,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-interface TreeNode {
-  name: string;
-  path: string;
-  type: 'file' | 'dir';
-  children?: TreeNode[];
-}
-
-interface OpenFile {
-  path: string;
-  content: string;
-  originalContent: string;
-  language: string;
-  isUnsaved: boolean;
+interface TreeNode { name: string; path: string; type: 'file' | 'dir'; children?: TreeNode[]; }
+interface OpenFile { path: string; content: string; originalContent: string; language: string; isUnsaved: boolean; }
+interface GitChange { status: string; path: string; fullPath: string; }
+interface WorkingChange { staged: string | null; unstaged: string | null; isUntracked: boolean; path: string; fullPath: string; }
+interface GitChangesData {
+  currentBranch: string; base: string;
+  branchChanges: GitChange[]; workingChanges: WorkingChange[];
+  stats: { filesChanged: number; insertions: number; deletions: number; };
 }
 
 const getLanguageFromExtension = (filename: string): string => {
@@ -70,82 +45,160 @@ const getFileIcon = (filename: string) => {
   if (filename.includes('package.json') || filename.includes('pubspec.yaml'))
     return <Settings className="w-4 h-4 text-blue-600" />;
   const map: Record<string, React.ReactElement> = {
-    'ts': <Code className="w-4 h-4 text-blue-600" />,
-    'tsx': <Code className="w-4 h-4 text-blue-600" />,
-    'js': <Code className="w-4 h-4 text-yellow-600" />,
-    'jsx': <Code className="w-4 h-4 text-yellow-600" />,
-    'dart': <Code className="w-4 h-4 text-teal-600" />,
-    'json': <Database className="w-4 h-4 text-orange-600" />,
-    'yaml': <Settings className="w-4 h-4 text-purple-600" />,
-    'yml': <Settings className="w-4 h-4 text-purple-600" />,
-    'md': <FileText className="w-4 h-4 text-gray-600" />,
-    'html': <Code className="w-4 h-4 text-orange-600" />,
-    'css': <Code className="w-4 h-4 text-blue-500" />,
-    'scss': <Code className="w-4 h-4 text-pink-600" />,
-    'png': <Image className="w-4 h-4 text-green-600" />,
-    'jpg': <Image className="w-4 h-4 text-green-600" />,
-    'svg': <Image className="w-4 h-4 text-purple-600" />,
-    'zip': <Archive className="w-4 h-4 text-gray-600" />,
+    'ts': <Code className="w-4 h-4 text-blue-600" />, 'tsx': <Code className="w-4 h-4 text-blue-600" />,
+    'js': <Code className="w-4 h-4 text-yellow-600" />, 'jsx': <Code className="w-4 h-4 text-yellow-600" />,
+    'dart': <Code className="w-4 h-4 text-teal-600" />, 'json': <Database className="w-4 h-4 text-orange-600" />,
+    'yaml': <Settings className="w-4 h-4 text-purple-600" />, 'yml': <Settings className="w-4 h-4 text-purple-600" />,
+    'md': <FileText className="w-4 h-4 text-gray-600" />, 'html': <Code className="w-4 h-4 text-orange-600" />,
+    'css': <Code className="w-4 h-4 text-blue-500" />, 'scss': <Code className="w-4 h-4 text-pink-600" />,
+    'png': <Image className="w-4 h-4 text-green-600" />, 'jpg': <Image className="w-4 h-4 text-green-600" />,
+    'svg': <Image className="w-4 h-4 text-purple-600" />, 'zip': <Archive className="w-4 h-4 text-gray-600" />,
   };
   return map[ext || ''] || <File className="w-4 h-4 text-gray-500" />;
+};
+
+const statusColor: Record<string, string> = {
+  'A': 'text-green-500', 'M': 'text-yellow-500', 'D': 'text-red-500',
+  'R': 'text-blue-500', 'C': 'text-blue-500', '?': 'text-gray-400',
+};
+const statusLabel: Record<string, string> = {
+  'A': 'Added', 'M': 'Modified', 'D': 'Deleted', 'R': 'Renamed', 'C': 'Copied', '?': 'Untracked',
 };
 
 function FileTreeNode({
   node, onFileSelect, onContextAction, expandedDirs, onToggleDir, selectedFile, level = 0,
 }: {
-  node: TreeNode;
-  onFileSelect: (path: string) => void;
+  node: TreeNode; onFileSelect: (path: string) => void;
   onContextAction: (action: 'newFile' | 'newFolder', dirPath: string) => void;
-  expandedDirs: Set<string>;
-  onToggleDir: (path: string) => void;
-  selectedFile: string;
-  level?: number;
+  expandedDirs: Set<string>; onToggleDir: (path: string) => void;
+  selectedFile: string; level?: number;
 }) {
   const [hovered, setHovered] = useState(false);
   const isExpanded = expandedDirs.has(node.path);
 
   if (node.type === 'file') {
     return (
-      <div
-        className={cn(
-          "flex items-center gap-2 py-1 px-2 cursor-pointer text-sm rounded",
-          selectedFile === node.path ? "bg-accent text-accent-foreground" : "hover:bg-muted/50"
-        )}
-        style={{ paddingLeft: `${8 + level * 16}px` }}
-        onClick={() => onFileSelect(node.path)}
-      >
-        {getFileIcon(node.name)}
-        <span className="truncate flex-1">{node.name}</span>
+      <div className={cn("flex items-center gap-2 py-1 px-2 cursor-pointer text-sm rounded",
+        selectedFile === node.path ? "bg-accent text-accent-foreground" : "hover:bg-muted/50")}
+        style={{ paddingLeft: `${8 + level * 16}px` }} onClick={() => onFileSelect(node.path)}>
+        {getFileIcon(node.name)}<span className="truncate flex-1">{node.name}</span>
       </div>
     );
   }
-
   return (
     <div>
-      <div
-        className="flex items-center gap-2 py-1 px-2 hover:bg-muted/50 cursor-pointer text-sm rounded"
-        style={{ paddingLeft: `${8 + level * 16}px` }}
-        onClick={() => onToggleDir(node.path)}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
-      >
+      <div className="flex items-center gap-2 py-1 px-2 hover:bg-muted/50 cursor-pointer text-sm rounded"
+        style={{ paddingLeft: `${8 + level * 16}px` }} onClick={() => onToggleDir(node.path)}
+        onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
         {isExpanded ? <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" /> : <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />}
         {isExpanded ? <FolderOpen className="w-4 h-4 text-blue-600 shrink-0" /> : <Folder className="w-4 h-4 text-blue-600 shrink-0" />}
         <span className="truncate flex-1 font-medium">{node.name}</span>
         {hovered && (
           <div className="flex items-center gap-0.5 shrink-0" onClick={e => e.stopPropagation()}>
-            <button className="p-0.5 hover:bg-muted rounded" title="New File" onClick={() => onContextAction('newFile', node.path)}>
-              <FilePlus className="w-3.5 h-3.5 text-muted-foreground" />
-            </button>
-            <button className="p-0.5 hover:bg-muted rounded" title="New Folder" onClick={() => onContextAction('newFolder', node.path)}>
-              <FolderPlus className="w-3.5 h-3.5 text-muted-foreground" />
-            </button>
+            <button className="p-0.5 hover:bg-muted rounded" title="New File" onClick={() => onContextAction('newFile', node.path)}><FilePlus className="w-3.5 h-3.5 text-muted-foreground" /></button>
+            <button className="p-0.5 hover:bg-muted rounded" title="New Folder" onClick={() => onContextAction('newFolder', node.path)}><FolderPlus className="w-3.5 h-3.5 text-muted-foreground" /></button>
           </div>
         )}
       </div>
       {isExpanded && node.children && node.children.map(child => (
         <FileTreeNode key={child.path} node={child} onFileSelect={onFileSelect} onContextAction={onContextAction} expandedDirs={expandedDirs} onToggleDir={onToggleDir} selectedFile={selectedFile} level={level + 1} />
       ))}
+    </div>
+  );
+}
+
+// Git Changes Panel
+function GitChangesPanel({ projectPath, onFileClick }: { projectPath: string; onFileClick: (path: string, mode: 'edit' | 'diff') => void; }) {
+  const [data, setData] = useState<GitChangesData | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [expandBranch, setExpandBranch] = useState(true);
+  const [expandWorking, setExpandWorking] = useState(true);
+
+  const load = useCallback(async () => {
+    if (!projectPath) return;
+    setLoading(true);
+    try {
+      const r = await fetch(`/api/files/git-changes?path=${encodeURIComponent(projectPath)}`);
+      if (r.ok) setData(await r.json());
+    } catch { /* ignore */ }
+    finally { setLoading(false); }
+  }, [projectPath]);
+
+  useEffect(() => { load(); }, [load]);
+
+  if (loading && !data) return <div className="flex justify-center py-4"><Loader2 className="w-4 h-4 animate-spin" /></div>;
+  if (!data) return <div className="text-xs text-muted-foreground p-2">No git data</div>;
+
+  return (
+    <div className="text-sm">
+      {/* Stats */}
+      <div className="px-3 py-2 border-b flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
+          <GitBranch className="w-3.5 h-3.5" />
+          <span className="font-medium text-xs">{data.currentBranch}</span>
+        </div>
+        <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={load}>
+          <RefreshCw className={cn("w-3 h-3", loading && "animate-spin")} />
+        </Button>
+      </div>
+      
+      {data.stats.filesChanged > 0 && (
+        <div className="px-3 py-1.5 border-b text-xs text-muted-foreground flex gap-3">
+          <span>{data.stats.filesChanged} files</span>
+          <span className="text-green-500">+{data.stats.insertions}</span>
+          <span className="text-red-500">-{data.stats.deletions}</span>
+        </div>
+      )}
+
+      {/* Branch Changes */}
+      {data.branchChanges.length > 0 && (
+        <div>
+          <div className="px-3 py-2 flex items-center gap-1 cursor-pointer hover:bg-muted/50"
+            onClick={() => setExpandBranch(!expandBranch)}>
+            {expandBranch ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+            <span className="text-xs font-medium">Branch Changes</span>
+            <Badge variant="secondary" className="text-[10px] px-1 py-0 ml-auto">{data.branchChanges.length}</Badge>
+          </div>
+          {expandBranch && data.branchChanges.map(c => (
+            <div key={c.path} className="flex items-center gap-1.5 px-3 py-1 hover:bg-muted/50 cursor-pointer text-xs group"
+              onClick={() => onFileClick(c.path, 'diff')}>
+              <span className={cn("font-mono font-bold w-3 text-center shrink-0", statusColor[c.status])}>{c.status}</span>
+              <span className="truncate flex-1" title={c.path}>{c.path}</span>
+              <button className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-muted rounded shrink-0"
+                onClick={e => { e.stopPropagation(); onFileClick(c.path, 'edit'); }} title="Open file">
+                <Edit3 className="w-3 h-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Working Changes */}
+      {data.workingChanges.length > 0 && (
+        <div>
+          <div className="px-3 py-2 flex items-center gap-1 cursor-pointer hover:bg-muted/50 border-t"
+            onClick={() => setExpandWorking(!expandWorking)}>
+            {expandWorking ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+            <span className="text-xs font-medium">Working Changes</span>
+            <Badge variant="secondary" className="text-[10px] px-1 py-0 ml-auto">{data.workingChanges.length}</Badge>
+          </div>
+          {expandWorking && data.workingChanges.map(c => {
+            const st = c.isUntracked ? '?' : (c.staged || c.unstaged || 'M');
+            return (
+              <div key={c.path} className="flex items-center gap-1.5 px-3 py-1 hover:bg-muted/50 cursor-pointer text-xs group"
+                onClick={() => onFileClick(c.path, c.isUntracked ? 'edit' : 'diff')}>
+                <span className={cn("font-mono font-bold w-3 text-center shrink-0", statusColor[st])}>{st}</span>
+                <span className="truncate flex-1" title={c.path}>{c.path}</span>
+                {c.staged && <Badge variant="outline" className="text-[9px] px-1 py-0 shrink-0">staged</Badge>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {data.branchChanges.length === 0 && data.workingChanges.length === 0 && (
+        <div className="px-3 py-4 text-xs text-muted-foreground text-center">No changes</div>
+      )}
     </div>
   );
 }
@@ -164,6 +217,8 @@ function EditorPageContent() {
   const [isResizing, setIsResizing] = useState(false);
   const [createDialog, setCreateDialog] = useState<{ open: boolean; type: 'file' | 'folder'; parentPath: string }>({ open: false, type: 'file', parentPath: '' });
   const [newName, setNewName] = useState('');
+  const [sidebarTab, setSidebarTab] = useState<'files' | 'git'>('files');
+  const [diffView, setDiffView] = useState<{ file: string; original: string; modified: string; language: string } | null>(null);
   const editorRef = useRef<any>(null);
 
   useEffect(() => {
@@ -197,6 +252,7 @@ function EditorPageContent() {
   useEffect(() => { loadTree(); }, [loadTree]);
 
   const handleFileSelect = async (filePath: string) => {
+    setDiffView(null);
     if (openFiles.find(f => f.path === filePath)) { setActiveFile(filePath); return; }
     try {
       const r = await fetch(`/api/files/content?path=${encodeURIComponent(filePath)}`);
@@ -207,6 +263,43 @@ function EditorPageContent() {
         setActiveFile(filePath);
       } else { setError(data.isBinary ? 'Cannot open binary file' : (data.error || 'Failed')); }
     } catch { setError('Network error'); }
+  };
+
+  const handleGitFileClick = async (relativePath: string, mode: 'edit' | 'diff') => {
+    const fullPath = `${projectPath}/${relativePath}`;
+    if (mode === 'edit') {
+      handleFileSelect(fullPath);
+      return;
+    }
+    // Load diff view
+    try {
+      const r = await fetch(`/api/files/git-diff?path=${encodeURIComponent(projectPath)}&file=${encodeURIComponent(relativePath)}`);
+      const data = await r.json();
+      if (r.ok && data.diff) {
+        // Parse the diff to get original and modified content
+        // For simplicity, load both versions
+        const language = getLanguageFromExtension(relativePath);
+        
+        // Get current file content
+        let modified = '';
+        try {
+          const cr = await fetch(`/api/files/content?path=${encodeURIComponent(fullPath)}`);
+          const cd = await cr.json();
+          if (cr.ok) modified = cd.content;
+        } catch { /* file might be deleted */ }
+        
+        // Get original (base) content via git show
+        let original = '';
+        try {
+          const or2 = await fetch(`/api/files/git-show?path=${encodeURIComponent(projectPath)}&file=${encodeURIComponent(relativePath)}`);
+          const od = await or2.json();
+          if (or2.ok) original = od.content;
+        } catch { /* new file */ }
+        
+        setDiffView({ file: relativePath, original, modified, language });
+        setActiveFile('');
+      }
+    } catch { setError('Failed to load diff'); }
   };
 
   const handleToggleDir = (dirPath: string) => {
@@ -259,8 +352,7 @@ function EditorPageContent() {
   };
 
   const handleContextAction = (action: 'newFile' | 'newFolder', dirPath: string) => {
-    setCreateDialog({ open: true, type: action === 'newFile' ? 'file' : 'folder', parentPath: dirPath });
-    setNewName('');
+    setCreateDialog({ open: true, type: action === 'newFile' ? 'file' : 'folder', parentPath: dirPath }); setNewName('');
   };
 
   useEffect(() => {
@@ -280,17 +372,12 @@ function EditorPageContent() {
     editorRef.current = editor;
     monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({ noSemanticValidation: false, noSyntaxValidation: false });
     monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
-      target: monaco.languages.typescript.ScriptTarget.ESNext,
-      module: monaco.languages.typescript.ModuleKind.ESNext,
+      target: monaco.languages.typescript.ScriptTarget.ESNext, module: monaco.languages.typescript.ModuleKind.ESNext,
       moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
       allowNonTsExtensions: true, jsx: monaco.languages.typescript.JsxEmit.ReactJSX,
       allowJs: true, checkJs: true, strict: true, esModuleInterop: true, skipLibCheck: true,
     });
     monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({ noSemanticValidation: false, noSyntaxValidation: false });
-    monaco.languages.typescript.javascriptDefaults.setCompilerOptions({
-      target: monaco.languages.typescript.ScriptTarget.ESNext, module: monaco.languages.typescript.ModuleKind.ESNext,
-      allowNonTsExtensions: true, jsx: monaco.languages.typescript.JsxEmit.ReactJSX, allowJs: true, checkJs: true,
-    });
     editor.focus();
   };
 
@@ -302,59 +389,85 @@ function EditorPageContent() {
       <div className="flex flex-1 overflow-hidden bg-background">
         {/* Sidebar */}
         <div className="border-r bg-card flex flex-col overflow-hidden" style={{ width: sidebarWidth, minWidth: sidebarWidth }}>
-          <div className="p-3 border-b flex items-center justify-between shrink-0">
-            <div className="min-w-0">
-              <h2 className="font-semibold text-sm">File Explorer</h2>
-              {projectPath && <p className="text-xs text-muted-foreground mt-0.5 truncate" title={projectPath}>{projectPath}</p>}
-            </div>
-            <div className="flex items-center gap-1 shrink-0">
-              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="New File" onClick={() => { setCreateDialog({ open: true, type: 'file', parentPath: projectPath }); setNewName(''); }}>
-                <FilePlus className="w-4 h-4" />
-              </Button>
-              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="New Folder" onClick={() => { setCreateDialog({ open: true, type: 'folder', parentPath: projectPath }); setNewName(''); }}>
-                <FolderPlus className="w-4 h-4" />
-              </Button>
-              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="Refresh" onClick={loadTree}>
-                <RefreshCw className="w-4 h-4" />
-              </Button>
-            </div>
+          {/* Sidebar tabs */}
+          <div className="flex border-b shrink-0">
+            <button className={cn("flex-1 px-3 py-2 text-xs font-medium", sidebarTab === 'files' ? "bg-background border-b-2 border-primary" : "text-muted-foreground hover:bg-muted/50")}
+              onClick={() => setSidebarTab('files')}>
+              <Folder className="w-3.5 h-3.5 inline mr-1.5" />Files
+            </button>
+            <button className={cn("flex-1 px-3 py-2 text-xs font-medium", sidebarTab === 'git' ? "bg-background border-b-2 border-primary" : "text-muted-foreground hover:bg-muted/50")}
+              onClick={() => setSidebarTab('git')}>
+              <GitBranch className="w-3.5 h-3.5 inline mr-1.5" />Changes
+            </button>
           </div>
-          <div className="flex-1 overflow-y-auto">
-            <div className="p-2">
-              {loading ? (
-                <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin" /></div>
-              ) : error && tree.length === 0 ? (
-                <div className="flex items-center gap-2 text-destructive text-sm py-4"><AlertCircle className="w-4 h-4" />{error}</div>
-              ) : (
-                tree.map(node => (
-                  <FileTreeNode key={node.path} node={node} onFileSelect={handleFileSelect} onContextAction={handleContextAction} expandedDirs={expandedDirs} onToggleDir={handleToggleDir} selectedFile={activeFile} />
-                ))
-              )}
+
+          {sidebarTab === 'files' ? (
+            <>
+              <div className="p-3 border-b flex items-center justify-between shrink-0">
+                <div className="min-w-0">
+                  <h2 className="font-semibold text-sm">File Explorer</h2>
+                  {projectPath && <p className="text-xs text-muted-foreground mt-0.5 truncate" title={projectPath}>{projectPath}</p>}
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="New File" onClick={() => { setCreateDialog({ open: true, type: 'file', parentPath: projectPath }); setNewName(''); }}><FilePlus className="w-4 h-4" /></Button>
+                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="New Folder" onClick={() => { setCreateDialog({ open: true, type: 'folder', parentPath: projectPath }); setNewName(''); }}><FolderPlus className="w-4 h-4" /></Button>
+                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="Refresh" onClick={loadTree}><RefreshCw className="w-4 h-4" /></Button>
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto">
+                <div className="p-2">
+                  {loading ? (
+                    <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin" /></div>
+                  ) : error && tree.length === 0 ? (
+                    <div className="flex items-center gap-2 text-destructive text-sm py-4"><AlertCircle className="w-4 h-4" />{error}</div>
+                  ) : (
+                    tree.map(node => (
+                      <FileTreeNode key={node.path} node={node} onFileSelect={handleFileSelect} onContextAction={handleContextAction} expandedDirs={expandedDirs} onToggleDir={handleToggleDir} selectedFile={activeFile} />
+                    ))
+                  )}
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="flex-1 overflow-y-auto">
+              <GitChangesPanel projectPath={projectPath} onFileClick={handleGitFileClick} />
             </div>
-          </div>
+          )}
         </div>
 
         {/* Resize */}
         <div className="w-1 bg-border hover:bg-primary/30 cursor-col-resize shrink-0" onMouseDown={e => { e.preventDefault(); setIsResizing(true); }} />
 
-        {/* Editor */}
+        {/* Editor area */}
         <div className="flex-1 flex flex-col overflow-hidden">
-          {openFiles.length > 0 && (
+          {/* Tabs */}
+          {(openFiles.length > 0 || diffView) && (
             <div className="border-b bg-muted/30 shrink-0 overflow-x-auto">
               <div className="flex">
                 {openFiles.map(file => (
-                  <div key={file.path} className={cn("flex items-center gap-1.5 px-3 py-2 border-r cursor-pointer text-sm shrink-0", activeFile === file.path ? "bg-background" : "bg-muted/30 hover:bg-muted/50")} onClick={() => setActiveFile(file.path)}>
+                  <div key={file.path} className={cn("flex items-center gap-1.5 px-3 py-2 border-r cursor-pointer text-sm shrink-0",
+                    activeFile === file.path && !diffView ? "bg-background" : "bg-muted/30 hover:bg-muted/50")}
+                    onClick={() => { setActiveFile(file.path); setDiffView(null); }}>
                     {getFileIcon(file.path.split('/').pop() || '')}
                     <span className="truncate max-w-32">{file.path.split('/').pop()}</span>
                     {file.isUnsaved && <Dot className="w-3 h-3 text-orange-500 -mr-1" />}
                     <button className="ml-1 p-0.5 hover:bg-muted rounded" onClick={e => { e.stopPropagation(); handleCloseFile(file.path); }}><X className="w-3 h-3" /></button>
                   </div>
                 ))}
+                {diffView && (
+                  <div className={cn("flex items-center gap-1.5 px-3 py-2 border-r cursor-pointer text-sm shrink-0 bg-background")}>
+                    <GitBranch className="w-4 h-4 text-yellow-500" />
+                    <span className="truncate max-w-48">{diffView.file}</span>
+                    <Badge variant="outline" className="text-[10px] px-1 py-0">diff</Badge>
+                    <button className="ml-1 p-0.5 hover:bg-muted rounded" onClick={() => setDiffView(null)}><X className="w-3 h-3" /></button>
+                  </div>
+                )}
               </div>
             </div>
           )}
 
-          {activeFileData && (
+          {/* Editor header */}
+          {activeFileData && !diffView && (
             <div className="flex items-center justify-between px-4 py-1.5 border-b bg-muted/50 shrink-0">
               <div className="flex items-center gap-2">
                 {getFileIcon(activeFileData.path.split('/').pop() || '')}
@@ -367,8 +480,34 @@ function EditorPageContent() {
             </div>
           )}
 
+          {diffView && (
+            <div className="flex items-center justify-between px-4 py-1.5 border-b bg-muted/50 shrink-0">
+              <div className="flex items-center gap-2">
+                <GitBranch className="w-4 h-4 text-yellow-500" />
+                <span className="text-sm font-medium">{diffView.file}</span>
+                <Badge variant="secondary" className="text-xs">Diff View</Badge>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => { setDiffView(null); handleFileSelect(`${projectPath}/${diffView.file}`); }}>
+                <Edit3 className="w-4 h-4 mr-1" />Edit
+              </Button>
+            </div>
+          )}
+
+          {/* Editor / Diff */}
           <div className="flex-1 overflow-hidden">
-            {activeFileData ? (
+            {diffView ? (
+              <DiffEditor
+                height="100%"
+                language={diffView.language}
+                original={diffView.original}
+                modified={diffView.modified}
+                theme="vs-dark"
+                options={{
+                  readOnly: true, renderSideBySide: true, automaticLayout: true,
+                  minimap: { enabled: false }, fontSize: 14, scrollBeyondLastLine: false,
+                }}
+              />
+            ) : activeFileData ? (
               <Editor
                 height="100%"
                 language={activeFileData.language}

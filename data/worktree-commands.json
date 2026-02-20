@@ -644,5 +644,25 @@
     "status": "completed",
     "startedAt": "2026-02-20T15:59:53.806Z",
     "exitCode": 1
+  },
+  {
+    "id": "1771603480416-5xkkqde0o",
+    "project": "hubdance/kadens",
+    "branch": "feat/review_kadens_jgodoy",
+    "command": "make dev",
+    "pid": 159110,
+    "status": "completed",
+    "startedAt": "2026-02-20T16:04:40.417Z",
+    "exitCode": null
+  },
+  {
+    "id": "1771603539689-08g83l242",
+    "project": "hubdance/kadens",
+    "branch": "feat/review_kadens_jgodoy",
+    "command": "make dev -- --hostname 0.0.0.0",
+    "pid": 162034,
+    "status": "completed",
+    "startedAt": "2026-02-20T16:05:39.689Z",
+    "exitCode": 2
   }
 ]
