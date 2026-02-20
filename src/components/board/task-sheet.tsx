@@ -104,7 +104,7 @@ export function TaskSheet({ taskId, mode, open, onOpenChange, onSaved, defaultSt
     ? allBranches.filter(b => b.name.toLowerCase().includes(branchSearch.toLowerCase()))
     : allBranches;
   const [worktreeStatus, setWorktreeStatus] = useState<{ hasWorktree: boolean; path?: string } | null>(null);
-  const [agents, setAgents] = useState<{ id: string; name: string; status?: string }[]>([]);
+  const [agents, setAgents] = useState<{ id: string; name: string; model?: string; status?: string }[]>([]);
   const [comments, setComments] = useState<{ id: string; author: string; text: string; created_at: string }[]>([]);
   const [newComment, setNewComment] = useState('');
   const [addingComment, setAddingComment] = useState(false);
@@ -374,11 +374,13 @@ export function TaskSheet({ taskId, mode, open, onOpenChange, onSaved, defaultSt
                   <SelectContent>
                     <SelectItem value="__none__">Unassigned</SelectItem>
                     <SelectItem value="jose-alejandro">👤 Jose Alejandro</SelectItem>
-                    {agents.map((agent) => (
-                      <SelectItem key={agent.id} value={agent.id}>
-                        🤖 {agent.name || agent.id} {agent.status === 'busy' ? '(busy)' : ''}
-                      </SelectItem>
-                    ))}
+                    {agents.map((agent) => {
+                      const shortModel = (agent.model || '').split('/').pop()?.replace(/-\d+$/, '') || '';
+                      const label = `🤖 ${agent.name || agent.id} · ${shortModel}${agent.status === 'busy' ? ' (busy)' : ''}`;
+                      return (
+                        <SelectItem key={agent.id} value={agent.id}>{label}</SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
               </div>

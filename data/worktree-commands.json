@@ -673,5 +673,14 @@
     "pid": 173952,
     "status": "running",
     "startedAt": "2026-02-20T16:10:23.857Z"
+  },
+  {
+    "id": "1771604021366-ummqpoxpb",
+    "project": "hubdance/kadens",
+    "branch": "feat/review_kadens_jgodoy",
+    "command": "pnpm dev -- --hostname 0.0.0.0",
+    "pid": 182141,
+    "status": "running",
+    "startedAt": "2026-02-20T16:13:41.366Z"
   }
 ]
