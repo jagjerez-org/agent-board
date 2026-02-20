@@ -1,6 +1,19 @@
 {
   "repos": [
     {
+      "id": "hubdance/kadens",
+      "name": "kadens",
+      "full_name": "hubdance/kadens",
+      "description": "",
+      "url": "https://github.com/hubdance/kadens",
+      "clone_url": "https://github.com/hubdance/kadens.git",
+      "default_branch": "master",
+      "is_private": true,
+      "provider": "GitHub - Jarvis",
+      "owner": "hubdance",
+      "updated_at": "2026-02-20T14:53:13Z"
+    },
+    {
       "id": "jagjerez-org/agent-board",
       "name": "agent-board",
       "full_name": "jagjerez-org/agent-board",
@@ -11,7 +24,7 @@
       "is_private": false,
       "provider": "GitHub - Jarvis",
       "owner": "jagjerez-org",
-      "updated_at": "2026-02-20T14:36:19Z"
+      "updated_at": "2026-02-20T14:47:46Z"
     },
     {
       "id": "AmericanLanguage-IT/Aula",
@@ -38,19 +51,6 @@
       "provider": "GitLab",
       "owner": "educabrera1997",
       "updated_at": "2026-02-20T11:02:29.522Z"
-    },
-    {
-      "id": "hubdance/kadens",
-      "name": "kadens",
-      "full_name": "hubdance/kadens",
-      "description": "",
-      "url": "https://github.com/hubdance/kadens",
-      "clone_url": "https://github.com/hubdance/kadens.git",
-      "default_branch": "master",
-      "is_private": true,
-      "provider": "GitHub - Jarvis",
-      "owner": "hubdance",
-      "updated_at": "2026-02-20T10:47:25Z"
     },
     {
       "id": "jagjerez-org/demo-repository",
@@ -586,5 +586,5 @@
       "updated_at": "2022-05-16T06:29:09.558Z"
     }
   ],
-  "last_updated": "2026-02-20T14:42:20.154Z"
+  "last_updated": "2026-02-20T15:19:19.478Z"
 }

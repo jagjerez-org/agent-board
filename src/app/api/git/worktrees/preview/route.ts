@@ -196,9 +196,13 @@ export async function POST(request: NextRequest) {
 
     // Patch command to bind to 0.0.0.0 for LAN access
     let finalCommand = command;
-    if (!finalCommand.includes('--hostname') && !finalCommand.includes('-H ')) {
-      if (/\b(next\s+dev|turbo\s+(run\s+)?dev)\b/.test(finalCommand)) {
-        finalCommand = finalCommand.replace(/\b(next\s+dev|turbo\s+(?:run\s+)?dev)\b/, '$& --hostname 0.0.0.0');
+    if (!finalCommand.includes('--hostname') && !finalCommand.includes('-H ') && !finalCommand.includes('0.0.0.0')) {
+      if (/\bnext\s+dev\b/.test(finalCommand)) {
+        // Direct next dev command — inject --hostname before other flags
+        finalCommand = finalCommand.replace(/\b(next\s+dev)\b/, '$& --hostname 0.0.0.0');
+      } else if (/\b(pnpm|npm|yarn|turbo)\b.*\bdev\b/.test(finalCommand)) {
+        // pnpm dev / turbo dev — append passthrough args
+        finalCommand += ' -- --hostname 0.0.0.0';
       }
     }
     if (finalCommand.includes('flutter') && !finalCommand.includes('--web-hostname')) {

@@ -404,5 +404,185 @@
     "status": "completed",
     "startedAt": "2026-02-20T13:13:46.653Z",
     "exitCode": 1
+  },
+  {
+    "id": "1771599123417-yih7i6jbp",
+    "project": "hubdance/kadens",
+    "branch": "feat/review_kadens_jgodoy",
+    "command": "pnpm install",
+    "pid": 5034,
+    "status": "completed",
+    "startedAt": "2026-02-20T14:52:03.417Z",
+    "exitCode": 0
+  },
+  {
+    "id": "1771599150597-jlpbup5o1",
+    "project": "hubdance/kadens",
+    "branch": "feat/review_kadens_jgodoy",
+    "command": "pnpm docker:dev:up",
+    "pid": 5286,
+    "status": "completed",
+    "startedAt": "2026-02-20T14:52:30.597Z",
+    "exitCode": 0
+  },
+  {
+    "id": "1771599284132-ca8mv7g14",
+    "project": "hubdance/kadens",
+    "branch": "feat/review_kadens_jgodoy",
+    "command": "pnpm docker:dev:up",
+    "pid": 8118,
+    "status": "completed",
+    "startedAt": "2026-02-20T14:54:44.132Z",
+    "exitCode": 0
+  },
+  {
+    "id": "1771599321705-v2nvdrdb2",
+    "project": "hubdance/kadens",
+    "branch": "feat/review_kadens_jgodoy",
+    "command": "pnpm --filter api db:migrate",
+    "pid": 8711,
+    "status": "completed",
+    "startedAt": "2026-02-20T14:55:21.705Z",
+    "exitCode": 1
+  },
+  {
+    "id": "1771599491023-wgnuyb7ho",
+    "project": "hubdance/kadens",
+    "branch": "feat/review_kadens_jgodoy",
+    "command": "pnpm --filter api db:migrate",
+    "pid": 10911,
+    "status": "completed",
+    "startedAt": "2026-02-20T14:58:11.023Z",
+    "exitCode": 1
+  },
+  {
+    "id": "1771599515083-ml27snpaf",
+    "project": "hubdance/kadens",
+    "branch": "feat/review_kadens_jgodoy",
+    "command": "pnpm --filter api db:migrate",
+    "pid": 11803,
+    "status": "completed",
+    "startedAt": "2026-02-20T14:58:35.083Z",
+    "exitCode": 1
+  },
+  {
+    "id": "1771599528596-55xwh1t4g",
+    "project": "hubdance/kadens",
+    "branch": "feat/review_kadens_jgodoy",
+    "command": "pnpm docker:dev:up",
+    "pid": 12327,
+    "status": "completed",
+    "startedAt": "2026-02-20T14:58:48.596Z",
+    "exitCode": 0
+  },
+  {
+    "id": "1771599556274-uex7r283b",
+    "project": "hubdance/kadens",
+    "branch": "feat/review_kadens_jgodoy",
+    "command": "docker compose -f docker-compose.dev.yml up -d --force-recreate",
+    "pid": 13465,
+    "status": "completed",
+    "startedAt": "2026-02-20T14:59:16.274Z",
+    "exitCode": 0
+  },
+  {
+    "id": "1771599584389-vz1044t77",
+    "project": "hubdance/kadens",
+    "branch": "feat/review_kadens_jgodoy",
+    "command": "pnpm --filter api db:migrate",
+    "pid": 14998,
+    "status": "completed",
+    "startedAt": "2026-02-20T14:59:44.389Z",
+    "exitCode": 1
+  },
+  {
+    "id": "1771599593612-a9h6d60eu",
+    "project": "hubdance/kadens",
+    "branch": "feat/review_kadens_jgodoy",
+    "command": "pnpm --filter api db:migrate",
+    "pid": 15526,
+    "status": "completed",
+    "startedAt": "2026-02-20T14:59:53.612Z",
+    "exitCode": 1
+  },
+  {
+    "id": "1771599716452-4fmk2klwu",
+    "project": "hubdance/kadens",
+    "branch": "feat/review_kadens_jgodoy",
+    "command": "pnpm --filter api db:migrate",
+    "pid": 19706,
+    "status": "completed",
+    "startedAt": "2026-02-20T15:01:56.452Z",
+    "exitCode": 0
+  },
+  {
+    "id": "1771599728362-vy2h11i84",
+    "project": "hubdance/kadens",
+    "branch": "feat/review_kadens_jgodoy",
+    "command": "pnpm --filter api db:seed",
+    "pid": 20173,
+    "status": "completed",
+    "startedAt": "2026-02-20T15:02:08.362Z",
+    "exitCode": 1
+  },
+  {
+    "id": "1771599837320-4crfpxro5",
+    "project": "hubdance/kadens",
+    "branch": "feat/review_kadens_jgodoy",
+    "command": "pnpm --filter api db:seed",
+    "pid": 23836,
+    "status": "completed",
+    "startedAt": "2026-02-20T15:03:57.321Z",
+    "exitCode": 1
+  },
+  {
+    "id": "1771599957901-fuywwvaz3",
+    "project": "hubdance/kadens",
+    "branch": "feat/review_kadens_jgodoy",
+    "command": "pnpm --filter api db:seed",
+    "pid": 27943,
+    "status": "completed",
+    "startedAt": "2026-02-20T15:05:57.901Z",
+    "exitCode": 1
+  },
+  {
+    "id": "1771599978707-n58pqcl0o",
+    "project": "hubdance/kadens",
+    "branch": "feat/review_kadens_jgodoy",
+    "command": "pnpm docker:dev:up",
+    "pid": 28698,
+    "status": "completed",
+    "startedAt": "2026-02-20T15:06:18.708Z",
+    "exitCode": 0
+  },
+  {
+    "id": "1771599990613-xs19jhuft",
+    "project": "hubdance/kadens",
+    "branch": "feat/review_kadens_jgodoy",
+    "command": "pnpm --filter api db:seed",
+    "pid": 29307,
+    "status": "completed",
+    "startedAt": "2026-02-20T15:06:30.613Z",
+    "exitCode": 1
+  },
+  {
+    "id": "1771600139963-ayyvcvkv2",
+    "project": "hubdance/kadens",
+    "branch": "feat/review_kadens_jgodoy",
+    "command": "pnpm build --filter @repo/shared",
+    "pid": 34404,
+    "status": "completed",
+    "startedAt": "2026-02-20T15:08:59.963Z",
+    "exitCode": 0
+  },
+  {
+    "id": "1771600154501-oat9cq58j",
+    "project": "hubdance/kadens",
+    "branch": "feat/review_kadens_jgodoy",
+    "command": "pnpm --filter api db:seed",
+    "pid": 35080,
+    "status": "completed",
+    "startedAt": "2026-02-20T15:09:14.501Z",
+    "exitCode": 0
   }
 ]

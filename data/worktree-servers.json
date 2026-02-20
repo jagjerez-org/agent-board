@@ -28,6 +28,15 @@
       "startedAt": "2026-02-20T12:55:25.621Z",
       "command": "pnpm run dev --host 0.0.0.0",
       "project": "hubdance/kadens"
+    },
+    {
+      "branch": "feat/review_kadens_jgodoy",
+      "port": 3200,
+      "pid": 59938,
+      "status": "stopped",
+      "startedAt": "2026-02-20T15:20:27.401Z",
+      "command": "cd apps/web && pnpm run dev -- -H 0.0.0.0",
+      "project": "hubdance/kadens"
     }
   ]
 }
