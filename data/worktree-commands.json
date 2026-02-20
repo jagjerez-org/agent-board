@@ -664,5 +664,14 @@
     "status": "completed",
     "startedAt": "2026-02-20T16:05:39.689Z",
     "exitCode": 2
+  },
+  {
+    "id": "1771603823857-9rru3k7pz",
+    "project": "hubdance/kadens",
+    "branch": "feat/review_kadens_jgodoy",
+    "command": "pnpm dev -- --hostname 0.0.0.0",
+    "pid": 173952,
+    "status": "running",
+    "startedAt": "2026-02-20T16:10:23.857Z"
   }
 ]

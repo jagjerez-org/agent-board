@@ -72,10 +72,11 @@ export async function GET(request: NextRequest) {
     });
 
     // Parse working tree changes
-    const workingChanges = statusOutput.trim().split('\n').filter(Boolean).map(line => {
+    // Note: don't trim() the output — it strips the leading space of porcelain format
+    const workingChanges = statusOutput.replace(/^\n+|\n+$/g, '').split('\n').filter(Boolean).map(line => {
       const staged = line.charAt(0);
       const unstaged = line.charAt(1);
-      const filePath = line.substring(3).trim();
+      const filePath = line.substring(3);
       return {
         staged: staged !== ' ' && staged !== '?' ? staged : null,
         unstaged: unstaged !== ' ' ? unstaged : null,
