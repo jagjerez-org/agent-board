@@ -62,10 +62,13 @@ class LogService {
   }
 
   addProcess(key: string, process: any, command: LogCommand) {
+    // Carry over existing subscribers (SSE connections opened before this process started)
+    const existingSubscribers = this.processes.get(key)?.subscribers || new Set<ReadableStreamDefaultController>();
+    
     const processData = {
       process,
       buffer: [] as string[],
-      subscribers: new Set<ReadableStreamDefaultController>(),
+      subscribers: existingSubscribers,
       command
     };
 
@@ -193,9 +196,18 @@ class LogService {
           // Add to subscribers
           processData.subscribers.add(controller);
         } else {
-          // No active process — send info message, keep stream open
+          // No active process — create a placeholder entry so future processes pick up this subscriber
+          const placeholder = {
+            process: null,
+            buffer: [] as string[],
+            subscribers: new Set<ReadableStreamDefaultController>(),
+            command: null as unknown as LogCommand,
+          };
+          placeholder.subscribers.add(controller);
+          logService['processes'].set(key, placeholder);
+          
           const encoder = new TextEncoder();
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'system', message: 'No active process. Run a command or start a preview server.', timestamp: new Date().toISOString() })}\n\n`));
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'system', message: 'Waiting for commands...', timestamp: new Date().toISOString() })}\n\n`));
         }
       },
       cancel() {

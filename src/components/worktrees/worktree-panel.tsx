@@ -563,7 +563,7 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
                               <div>
                                 <div className="flex items-center gap-2">
                                   <span className="font-medium">{wt.branch}</span>
-                                  {wt.isMain && <Badge variant="outline" className="text-[10px] px-1 py-0">primary</Badge>}
+                                  
                                   {branchInfo?.isLocal && branchInfo?.isRemote && <Badge variant="default" className="text-[10px] px-1 py-0">local + remote</Badge>}
                                   {branchInfo?.isLocal && !branchInfo?.isRemote && <Badge variant="secondary" className="text-[10px] px-1 py-0">local only</Badge>}
                                   {branchInfo && !branchInfo.isLocal && branchInfo.isRemote && <Badge variant="outline" className="text-[10px] px-1 py-0">remote only</Badge>}
@@ -599,11 +599,9 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
                                 <FolderOpen className="w-4 h-4" />
                               </Button>
                               
-                              {!wt.isMain && (
-                                <Button variant="destructive" size="sm" onClick={() => removeWorktree(wt.branch)} disabled={deleting === wt.branch} title="Remove worktree">
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
-                              )}
+                              <Button variant="destructive" size="sm" onClick={() => removeWorktree(wt.branch)} disabled={deleting === wt.branch} title="Remove worktree">
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
                             </div>
                           </div>
 
