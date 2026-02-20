@@ -74,7 +74,7 @@ export async function GET(request: NextRequest, { params }: Props) {
     
     // Get session labels from sessions.json
     const sessionsPath = join(sessionsDir, 'sessions.json');
-    let sessionLabels: Record<string, string> = {};
+    const sessionLabels: Record<string, string> = {};
     try {
       const raw = await readFile(sessionsPath, 'utf-8');
       const sessions = JSON.parse(raw) as Record<string, Record<string, unknown>>;

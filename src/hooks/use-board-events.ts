@@ -19,7 +19,10 @@ export interface BoardEvent {
  */
 export function useBoardEvents(onEvent: (event: BoardEvent) => void) {
   const onEventRef = useRef(onEvent);
-  onEventRef.current = onEvent;
+
+  useEffect(() => {
+    onEventRef.current = onEvent;
+  }, [onEvent]);
 
   const reconnectDelay = useRef(1000);
 

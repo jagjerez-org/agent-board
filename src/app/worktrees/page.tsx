@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FolderOpen, Users, Activity, GitBranch, Monitor, Terminal } from 'lucide-react';
@@ -25,14 +25,7 @@ export default function WorktreesPage() {
       .catch(() => {});
   }, []);
 
-  // Load worktrees when project changes
-  useEffect(() => {
-    if (selectedProject) {
-      loadWorktrees();
-    }
-  }, [selectedProject]);
-
-  const loadWorktrees = async () => {
+  const loadWorktrees = useCallback(async () => {
     if (!selectedProject) return;
     
     try {
@@ -47,7 +40,27 @@ export default function WorktreesPage() {
       console.error('Error loading worktrees:', error);
       setWorktrees([]);
     }
-  };
+  }, [selectedProject]);
+
+  // Load worktrees when project changes
+  useEffect(() => {
+    if (!selectedProject) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await fetch(`/api/git/worktrees?project=${encodeURIComponent(selectedProject)}`);
+        if (response.ok && !cancelled) {
+          const data = await response.json();
+          setWorktrees(data.worktrees || []);
+        } else if (!cancelled) {
+          setWorktrees([]);
+        }
+      } catch {
+        if (!cancelled) setWorktrees([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [selectedProject]);
 
   return (
     <div className="flex flex-col h-screen">
