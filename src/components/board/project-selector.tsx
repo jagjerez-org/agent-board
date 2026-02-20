@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Check, ChevronsUpDown, RefreshCw, FolderGit2, Plus } from 'lucide-react';
+import { Check, ChevronsUpDown, RefreshCw, FolderGit2, Plus, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import {
@@ -98,7 +98,11 @@ export function ProjectSelector({ value, onValueChange, className }: ProjectSele
           )}
         >
           <div className="flex items-center truncate">
-            <FolderGit2 className="mr-2 h-4 w-4 shrink-0" />
+            {loading ? (
+              <Loader2 className="mr-2 h-4 w-4 shrink-0 animate-spin" />
+            ) : (
+              <FolderGit2 className="mr-2 h-4 w-4 shrink-0" />
+            )}
             <span className="truncate">
               {selectedProject ? selectedProject.name : 'All Projects'}
             </span>
@@ -111,9 +115,20 @@ export function ProjectSelector({ value, onValueChange, className }: ProjectSele
           <CommandInput placeholder="Search projects..." />
           <CommandList>
             <CommandEmpty>
-              {loading ? 'Loading projects...' : 'No projects found.'}
+              {loading ? (
+                <div className="flex items-center justify-center gap-2 py-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Loading projects...</span>
+                </div>
+              ) : 'No projects found.'}
             </CommandEmpty>
             <CommandGroup>
+              {loading && projects.length === 0 && (
+                <div className="flex items-center justify-center gap-2 py-4 text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span className="text-sm">Loading projects...</span>
+                </div>
+              )}
               <CommandItem onSelect={() => handleProjectSelect('all')}>
                 <Check
                   className={cn(
