@@ -637,7 +637,15 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
                                 <Terminal className="w-4 h-4" />
                               </Button>
                               
-                              <Button variant="outline" size="sm" onClick={() => alert(`Open: ${wt.path}`)} title="Open folder">
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={() => {
+                                  const editorUrl = `/editor?project=${selectedProject}&branch=${wt.branch}`;
+                                  window.open(editorUrl, '_blank');
+                                }} 
+                                title="Open in Monaco Editor"
+                              >
                                 <FolderOpen className="w-4 h-4" />
                               </Button>
                               
