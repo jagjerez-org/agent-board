@@ -88,13 +88,21 @@ export function TaskSheet({ taskId, mode, open, onOpenChange, onSaved, defaultSt
     ? branches.filter(b => b.toLowerCase().includes(branchSearch.toLowerCase()))
     : branches;
   const [worktreeStatus, setWorktreeStatus] = useState<{ hasWorktree: boolean; path?: string } | null>(null);
+  const [agents, setAgents] = useState<{ id: string; name: string; status?: string }[]>([]);
+  const [comments, setComments] = useState<{ id: string; author: string; text: string; created_at: string }[]>([]);
+  const [newComment, setNewComment] = useState('');
+  const [addingComment, setAddingComment] = useState(false);
 
-  // Load projects
+  // Load projects and agents
   useEffect(() => {
     if (open) {
       fetch('/api/projects')
         .then(r => r.json())
         .then(data => setProjects(data.projects || []))
+        .catch(() => {});
+      fetch('/api/agents')
+        .then(r => r.json())
+        .then(data => setAgents(data.agents || []))
         .catch(() => {});
     }
   }, [open]);
@@ -154,6 +162,11 @@ export function TaskSheet({ taskId, mode, open, onOpenChange, onSaved, defaultSt
         })
         .catch(() => {})
         .finally(() => setLoading(false));
+      // Load comments
+      fetch(`/api/tasks/${taskId}/comments`)
+        .then(r => r.json())
+        .then(data => setComments(data.comments || []))
+        .catch(() => setComments([]));
     } else if (mode === 'create' && open) {
       // Reset form
       setTitle('');
@@ -280,7 +293,18 @@ export function TaskSheet({ taskId, mode, open, onOpenChange, onSaved, defaultSt
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-medium mb-1 block">Assignee</label>
-                <Input value={assignee} onChange={(e) => setAssignee(e.target.value)} placeholder="agent-id" />
+                <Select value={assignee || '__none__'} onValueChange={(v) => setAssignee(v === '__none__' ? '' : v)}>
+                  <SelectTrigger><SelectValue placeholder="Select agent..." /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Unassigned</SelectItem>
+                    <SelectItem value="jose-alejandro">👤 Jose Alejandro</SelectItem>
+                    {agents.map((agent) => (
+                      <SelectItem key={agent.id} value={agent.id}>
+                        🤖 {agent.name || agent.id} {agent.status === 'busy' ? '(busy)' : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <label className="text-sm font-medium mb-1 block">Story Points</label>
@@ -429,6 +453,62 @@ export function TaskSheet({ taskId, mode, open, onOpenChange, onSaved, defaultSt
                 </div>
               )}
             </div>
+
+            {/* Comments section - only in edit mode */}
+            {mode === 'edit' && taskId && (
+              <div className="border-t pt-4">
+                <label className="text-sm font-medium mb-2 block">Comments / Refinement</label>
+                <div className="space-y-2 max-h-48 overflow-y-auto mb-3">
+                  {comments.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">No comments yet. Add notes for refinement.</p>
+                  ) : (
+                    comments.map((c) => (
+                      <div key={c.id} className="bg-muted/50 rounded p-2 text-sm">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-medium text-xs">{c.author}</span>
+                          <span className="text-xs text-muted-foreground">{new Date(c.created_at).toLocaleString()}</span>
+                        </div>
+                        <p className="text-sm whitespace-pre-wrap">{c.text}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <Textarea
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                    placeholder="Add a comment for refinement..."
+                    rows={2}
+                    className="text-sm"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!newComment.trim() || addingComment}
+                    onClick={async () => {
+                      if (!newComment.trim()) return;
+                      setAddingComment(true);
+                      try {
+                        const res = await fetch(`/api/tasks/${taskId}/comments`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ author: 'Jose Alejandro', text: newComment.trim() }),
+                        });
+                        if (res.ok) {
+                          const data = await res.json();
+                          setComments(prev => [...prev, data.comment]);
+                          setNewComment('');
+                        }
+                      } catch { /* ignore */ }
+                      finally { setAddingComment(false); }
+                    }}
+                    className="self-end"
+                  >
+                    {addingComment ? '...' : 'Add'}
+                  </Button>
+                </div>
+              </div>
+            )}
 
             <div className="flex justify-between pt-4 border-t">
               {mode === 'edit' ? (
