@@ -406,11 +406,14 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'No running process found' }, { status: 404 });
     }
 
+    const pid = processData.process.pid;
+    // Kill entire process tree aggressively
     try {
-      process.kill(-processData.process.pid, 'SIGKILL');
-    } catch {
-      try { process.kill(processData.process.pid, 'SIGKILL'); } catch { /* already dead */ }
-    }
+      const { execSync } = require('child_process');
+      execSync(`kill -9 -${pid} 2>/dev/null; pkill -9 -P ${pid} 2>/dev/null`, { timeout: 5000 });
+    } catch { /* ignore */ }
+    try { process.kill(-pid, 'SIGKILL'); } catch { /* ignore */ }
+    try { process.kill(pid, 'SIGKILL'); } catch { /* ignore */ }
 
     // Notify subscribers
     const encoder = new TextEncoder();

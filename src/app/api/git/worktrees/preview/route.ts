@@ -329,20 +329,22 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Kill the process
+    // Kill the process and all children
     if (server.status === 'running' || server.status === 'starting') {
+      // First try killing the entire process tree via pkill
       try {
-        // Kill the process group to ensure all child processes are terminated
-        process.kill(-server.pid, 'SIGTERM');
-      } catch (error) {
-        console.warn(`Failed to kill process group ${server.pid}:`, error);
-        // Try killing just the process
-        try {
-          process.kill(server.pid, 'SIGTERM');
-        } catch (killError) {
-          console.warn(`Failed to kill process ${server.pid}:`, killError);
-        }
-      }
+        const { execSync } = require('child_process');
+        // Kill all descendants of the process group
+        execSync(`kill -9 -${server.pid} 2>/dev/null; pkill -9 -P ${server.pid} 2>/dev/null`, { timeout: 5000 });
+      } catch { /* ignore — processes may already be dead */ }
+      // Also try direct kill as fallback
+      try { process.kill(-server.pid, 'SIGKILL'); } catch { /* ignore */ }
+      try { process.kill(server.pid, 'SIGKILL'); } catch { /* ignore */ }
+      // Kill anything on the port too
+      try {
+        const { execSync } = require('child_process');
+        execSync(`fuser -k ${server.port}/tcp 2>/dev/null`, { timeout: 5000 });
+      } catch { /* ignore */ }
     }
 
     // Update server status
