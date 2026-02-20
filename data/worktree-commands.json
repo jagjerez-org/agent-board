@@ -294,5 +294,85 @@
     "pid": 4178901,
     "status": "running",
     "startedAt": "2026-02-20T11:49:02.666Z"
+  },
+  {
+    "id": "1771591788399-p06s0p9px",
+    "project": "hubdance/kadens",
+    "branch": "feat/review_kadens_jgodoy_20260220",
+    "command": "git status",
+    "pid": 85827,
+    "status": "completed",
+    "startedAt": "2026-02-20T12:49:48.399Z",
+    "exitCode": 0
+  },
+  {
+    "id": "1771591796389-sc5cuxfe7",
+    "project": "hubdance/kadens",
+    "branch": "feat/review_kadens_jgodoy_20260220",
+    "command": "pnpm install",
+    "pid": 86072,
+    "status": "completed",
+    "startedAt": "2026-02-20T12:49:56.389Z",
+    "exitCode": 0
+  },
+  {
+    "id": "1771591816235-kpw09r285",
+    "project": "hubdance/kadens",
+    "branch": "feat/review_kadens_jgodoy_20260220",
+    "command": "pnpm install -y",
+    "pid": 86651,
+    "status": "completed",
+    "startedAt": "2026-02-20T12:50:16.235Z",
+    "exitCode": 1
+  },
+  {
+    "id": "1771591822002-4hqxaa1ux",
+    "project": "hubdance/kadens",
+    "branch": "feat/review_kadens_jgodoy_20260220",
+    "command": "pnpm install",
+    "pid": 86811,
+    "status": "completed",
+    "startedAt": "2026-02-20T12:50:22.002Z",
+    "exitCode": 0
+  },
+  {
+    "id": "1771591851854-82vlxd0wv",
+    "project": "hubdance/kadens",
+    "branch": "feat/review_kadens_jgodoy_20260220",
+    "command": "pnpm install",
+    "pid": 87652,
+    "status": "completed",
+    "startedAt": "2026-02-20T12:50:51.854Z",
+    "exitCode": 0
+  },
+  {
+    "id": "1771591994987-s97lh0bwn",
+    "project": "hubdance/kadens",
+    "branch": "feat/review_kadens_jgodoy_20260220",
+    "command": "pnpm install --yes",
+    "pid": 91615,
+    "status": "completed",
+    "startedAt": "2026-02-20T12:53:14.987Z",
+    "exitCode": 1
+  },
+  {
+    "id": "1771592007594-v45xt8d8q",
+    "project": "hubdance/kadens",
+    "branch": "feat/review_kadens_jgodoy_20260220",
+    "command": "pnpm install --force",
+    "pid": 91980,
+    "status": "completed",
+    "startedAt": "2026-02-20T12:53:27.594Z",
+    "exitCode": null
+  },
+  {
+    "id": "1771592065858-ozl6ok6gr",
+    "project": "hubdance/kadens",
+    "branch": "feat/review_kadens_jgodoy_20260220",
+    "command": "pnpm install --force",
+    "pid": 93672,
+    "status": "completed",
+    "startedAt": "2026-02-20T12:54:25.858Z",
+    "exitCode": 0
   }
 ]

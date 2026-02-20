@@ -17,9 +17,16 @@ async function fileExists(filePath: string): Promise<boolean> {
 }
 
 async function detectPackageManager(dir: string): Promise<'pnpm' | 'yarn' | 'bun' | 'npm'> {
-  if (await fileExists(path.join(dir, 'pnpm-lock.yaml'))) return 'pnpm';
-  if (await fileExists(path.join(dir, 'yarn.lock'))) return 'yarn';
-  if (await fileExists(path.join(dir, 'bun.lockb'))) return 'bun';
+  // Check current dir and parent dirs (for monorepos where lockfile is at root)
+  let current = dir;
+  for (let i = 0; i < 5; i++) {
+    if (await fileExists(path.join(current, 'pnpm-lock.yaml'))) return 'pnpm';
+    if (await fileExists(path.join(current, 'yarn.lock'))) return 'yarn';
+    if (await fileExists(path.join(current, 'bun.lockb'))) return 'bun';
+    const parent = path.dirname(current);
+    if (parent === current) break;
+    current = parent;
+  }
   return 'npm';
 }
 
@@ -39,21 +46,30 @@ async function detectNodeApp(dir: string, relativePath: string): Promise<Detecte
     else if (scripts.serve) script = 'serve';
     else return null;
 
-    // Detect framework for port hints
+    // Detect framework for port and host config
     const deps = { ...pkg.dependencies, ...pkg.devDependencies };
     let port: number | undefined;
     let framework = '';
-    if (deps['next']) { framework = 'Next.js'; port = 3000; }
-    else if (deps['nuxt']) { framework = 'Nuxt'; port = 3000; }
-    else if (deps['vite'] || deps['@vitejs/plugin-react']) { framework = 'Vite'; port = 5173; }
-    else if (deps['@angular/core']) { framework = 'Angular'; port = 4200; }
-    else if (deps['@nestjs/core']) { framework = 'NestJS'; port = 3000; }
-    else if (deps['express']) { framework = 'Express'; port = 3000; }
+    let hostFlag = ''; // How to bind to 0.0.0.0 for this framework
+    
+    if (deps['next']) { framework = 'Next.js'; port = 3000; hostFlag = '-H 0.0.0.0'; }
+    else if (deps['nuxt']) { framework = 'Nuxt'; port = 3000; hostFlag = '--host 0.0.0.0'; }
+    else if (deps['vite'] || deps['@vitejs/plugin-react']) { framework = 'Vite'; port = 5173; hostFlag = '--host 0.0.0.0'; }
+    else if (deps['@angular/core']) { framework = 'Angular'; port = 4200; hostFlag = '--host 0.0.0.0'; }
+    else if (deps['@nestjs/core']) { framework = 'NestJS'; port = 3000; } // NestJS uses HOST env var
+    else if (deps['express']) { framework = 'Express'; port = 3000; } // Express uses HOST env var
+    else if (deps['webpack-dev-server']) { hostFlag = '--host 0.0.0.0'; }
+    else if (deps['react-scripts']) { framework = 'CRA'; port = 3000; } // CRA uses HOST env var
+
+    // Build command with host binding
+    const baseCmd = `${pm} ${script === 'start' ? 'start' : `run ${script}`}`;
+    // For frameworks that accept CLI flags, append them via -- separator
+    const command = hostFlag ? `${baseCmd} -- ${hostFlag}` : baseCmd;
 
     return {
       name: pkg.name || path.basename(dir),
       type: 'node',
-      command: `${pm} ${script === 'start' ? 'start' : `run ${script}`}`,
+      command,
       cwd: relativePath,
       port,
       packageManager: pm,
