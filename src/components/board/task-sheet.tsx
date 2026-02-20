@@ -32,6 +32,14 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Trash2, GitBranch, Check, ChevronsUpDown, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -85,6 +93,8 @@ export function TaskSheet({ taskId, mode, open, onOpenChange, onSaved, defaultSt
   const [branchOpen, setBranchOpen] = useState(false);
   const [branchSearch, setBranchSearch] = useState('');
   const [creatingBranch, setCreatingBranch] = useState(false);
+  const [createBranchDialog, setCreateBranchDialog] = useState<{ open: boolean; name: string }>({ open: false, name: '' });
+  const [baseBranchForCreate, setBaseBranchForCreate] = useState('');
 
   // Include saved branch in list even if not on remote/local
   const allBranches: BranchInfo[] = branch && !branches.some(b => b.name === branch)
@@ -200,9 +210,20 @@ export function TaskSheet({ taskId, mode, open, onOpenChange, onSaved, defaultSt
     }
   }, [mode, taskId, open, defaultStatus]);
 
-  const handleCreateBranch = async (branchName: string) => {
+  const handleCreateBranch = (branchName: string) => {
     setBranchOpen(false);
     setBranchSearch('');
+    // Find default base branch (main or master or first branch)
+    const defaultBase = allBranches.find(b => b.name === 'main')?.name
+      || allBranches.find(b => b.name === 'master')?.name
+      || allBranches[0]?.name || 'main';
+    setBaseBranchForCreate(defaultBase);
+    setCreateBranchDialog({ open: true, name: branchName });
+  };
+
+  const confirmCreateBranch = async () => {
+    const branchName = createBranchDialog.name;
+    setCreateBranchDialog({ open: false, name: '' });
     setCreatingBranch(true);
     try {
       const proj = projects.find(p => p.id === projectId);
@@ -212,16 +233,14 @@ export function TaskSheet({ taskId, mode, open, onOpenChange, onSaved, defaultSt
       const res = await fetch('/api/git/branches', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ project: branchProjectId, branch: branchName }),
+        body: JSON.stringify({ project: branchProjectId, branch: branchName, baseBranch: baseBranchForCreate }),
       });
       const data = await res.json();
       if (!res.ok) {
         alert(data.error || 'Failed to create branch');
-        // Still set as saved-only branch
         setBranch(branchName);
         return;
       }
-      // Refresh branch list and select the new branch
       setBranch(branchName);
       const listRes = await fetch(`/api/git/branches?project=${encodeURIComponent(branchProjectId)}`);
       const listData = await listRes.json();
@@ -301,6 +320,7 @@ export function TaskSheet({ taskId, mode, open, onOpenChange, onSaved, defaultSt
   };
 
   return (
+    <>
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="sm:max-w-lg overflow-y-auto">
         <SheetHeader>
@@ -598,5 +618,47 @@ export function TaskSheet({ taskId, mode, open, onOpenChange, onSaved, defaultSt
         )}
       </SheetContent>
     </Sheet>
+
+    {/* Create Branch Dialog — asks for base branch */}
+    <Dialog open={createBranchDialog.open} onOpenChange={(open) => { if (!open) setCreateBranchDialog({ open: false, name: '' }); }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Create Branch</DialogTitle>
+          <DialogDescription>
+            Create <strong>{createBranchDialog.name}</strong> and push to origin
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div>
+            <label className="text-sm font-medium mb-1 block">Base Branch (create from)</label>
+            <Select value={baseBranchForCreate} onValueChange={setBaseBranchForCreate}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select base branch..." />
+              </SelectTrigger>
+              <SelectContent>
+                {allBranches.filter(b => b.isLocal || b.isRemote).map((b) => (
+                  <SelectItem key={b.name} value={b.name}>
+                    <span className="flex items-center gap-1.5">
+                      <GitBranch className="w-3 h-3" />
+                      {b.name}
+                      {b.isLocal && b.isRemote && <Badge variant="default" className="text-[10px] px-1 py-0">local + remote</Badge>}
+                      {b.isLocal && !b.isRemote && <Badge variant="secondary" className="text-[10px] px-1 py-0">local</Badge>}
+                      {!b.isLocal && b.isRemote && <Badge variant="outline" className="text-[10px] px-1 py-0">remote</Badge>}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setCreateBranchDialog({ open: false, name: '' })}>Cancel</Button>
+          <Button onClick={confirmCreateBranch} disabled={!baseBranchForCreate}>
+            Create &amp; Push
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
