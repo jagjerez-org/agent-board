@@ -108,5 +108,104 @@
     "status": "completed",
     "startedAt": "2026-02-20T10:13:59.990Z",
     "exitCode": 0
+  },
+  {
+    "id": "1771583607603-yhwfjya9f",
+    "project": "educabrera1997/ALA APP",
+    "branch": "feat/change_ala_appa",
+    "command": "git status",
+    "pid": 4047973,
+    "status": "completed",
+    "startedAt": "2026-02-20T10:33:27.603Z",
+    "exitCode": 0
+  },
+  {
+    "id": "1771583617861-tkehgduki",
+    "project": "educabrera1997/ALA APP",
+    "branch": "feat/change_ala_appa",
+    "command": "git log --oneline -10",
+    "pid": 4048238,
+    "status": "completed",
+    "startedAt": "2026-02-20T10:33:37.861Z",
+    "exitCode": 0
+  },
+  {
+    "id": "1771583627311-n789ky5g0",
+    "project": "educabrera1997/ALA APP",
+    "branch": "feat/change_ala_appa",
+    "command": "git log",
+    "pid": 4048504,
+    "status": "completed",
+    "startedAt": "2026-02-20T10:33:47.311Z",
+    "exitCode": 0
+  },
+  {
+    "id": "1771583640594-srti8d5c1",
+    "project": "educabrera1997/ALA APP",
+    "branch": "feat/change_ala_appa",
+    "command": "clear",
+    "pid": 4048887,
+    "status": "completed",
+    "startedAt": "2026-02-20T10:34:00.594Z",
+    "exitCode": 1
+  },
+  {
+    "id": "1771583647659-61mlkbuq4",
+    "project": "educabrera1997/ALA APP",
+    "branch": "feat/change_ala_appa",
+    "command": "clear",
+    "pid": 4049064,
+    "status": "completed",
+    "startedAt": "2026-02-20T10:34:07.659Z",
+    "exitCode": 1
+  },
+  {
+    "id": "1771583651842-4iwqvudls",
+    "project": "educabrera1997/ALA APP",
+    "branch": "feat/change_ala_appa",
+    "command": "ls",
+    "pid": 4049183,
+    "status": "completed",
+    "startedAt": "2026-02-20T10:34:11.842Z",
+    "exitCode": 0
+  },
+  {
+    "id": "1771583663039-89p7e734q",
+    "project": "educabrera1997/ALA APP",
+    "branch": "feat/change_ala_appa",
+    "command": "cd apps",
+    "pid": 4049507,
+    "status": "running",
+    "startedAt": "2026-02-20T10:34:23.039Z"
+  },
+  {
+    "id": "1771583664105-olokkg45g",
+    "project": "educabrera1997/ALA APP",
+    "branch": "feat/change_ala_appa",
+    "command": "ls",
+    "pid": 4049539,
+    "status": "completed",
+    "startedAt": "2026-02-20T10:34:24.105Z",
+    "exitCode": 0
+  },
+  {
+    "id": "1771583685291-w7gsb9zhm",
+    "project": "educabrera1997/ALA APP",
+    "branch": "feat/change_ala_appa",
+    "command": "ls apps/ala_app",
+    "pid": 4050127,
+    "status": "completed",
+    "startedAt": "2026-02-20T10:34:45.291Z",
+    "exitCode": 0
+  },
+  {
+    "id": "1771583761535-8qgmjspas",
+    "project": "educabrera1997/ALA APP",
+    "branch": "feat/change_ala_appa",
+    "command": "ls",
+    "pid": 4052244,
+    "status": "completed",
+    "startedAt": "2026-02-20T10:36:01.535Z",
+    "exitCode": 0
   }
 ]

@@ -134,7 +134,7 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
   const [projectSearch, setProjectSearch] = useState('');
   const [projectOpen, setProjectOpen] = useState(false);
   const [loadingBranches, setLoadingBranches] = useState(false);
-  const [previewDialog, setPreviewDialog] = useState<{ open: boolean; branch: string; command: string }>({ open: false, branch: '', command: '' });
+  const [previewDialog, setPreviewDialog] = useState<{ open: boolean; branch: string; command: string; cwd: string }>({ open: false, branch: '', command: '', cwd: '' });
 
   // Resolve project ID to repo-style path
   const getRepoProjectId = useCallback((pid: string) => {
@@ -294,7 +294,7 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
 
   // Preview server actions
   const openPreviewDialog = (branch: string) => {
-    setPreviewDialog({ open: true, branch, command: 'pnpm dev' });
+    setPreviewDialog({ open: true, branch, command: 'pnpm dev', cwd: '' });
   };
 
   const startPreview = async (branch: string, command = 'pnpm dev') => {
@@ -860,13 +860,29 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
                 </Button>
               ))}
             </div>
+            <div>
+              <Label className="text-sm font-medium mb-1 block">Subdirectory <span className="text-muted-foreground font-normal">(optional, for monorepos)</span></Label>
+              <Input
+                value={previewDialog.cwd}
+                onChange={(e) => setPreviewDialog(p => ({ ...p, cwd: e.target.value }))}
+                placeholder="e.g. apps/ala_app, packages/web"
+              />
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {['apps/ala_app', 'apps/web', 'apps/api', 'packages/web'].map(dir => (
+                <Button key={dir} variant="outline" size="sm" className="text-xs h-7"
+                  onClick={() => setPreviewDialog(p => ({ ...p, cwd: dir }))}>
+                  {dir}
+                </Button>
+              ))}
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPreviewDialog(p => ({ ...p, open: false }))}>Cancel</Button>
             <Button onClick={() => {
-              const { branch, command } = previewDialog;
+              const { branch, command, cwd } = previewDialog;
               setPreviewDialog(p => ({ ...p, open: false }));
-              startPreview(branch, command);
+              startPreview(branch, cwd ? `cd ${cwd} && ${command}` : command);
             }} disabled={!previewDialog.command.trim()}>
               <Play className="w-3 h-3 mr-1" /> Start
             </Button>
