@@ -105,6 +105,7 @@ export function AgentSheet({ agentId, open, onOpenChange, onUpdated, agents }: A
   const [skillsLoading, setSkillsLoading] = useState(false);
   const [skillSearch, setSkillSearch] = useState('');
   const [agentSkills, setAgentSkills] = useState<string[]>([]);
+  const [hasSkillOverride, setHasSkillOverride] = useState(false);
   const [updatingSkills, setUpdatingSkills] = useState(false);
 
   // Live status
@@ -220,7 +221,9 @@ export function AgentSheet({ agentId, open, onOpenChange, onUpdated, agents }: A
       if (agentId) {
         const agentRes = await fetch('/api/skills/agents');
         const agentData = await agentRes.json();
-        setAgentSkills(agentData.agentSkills?.[agentId] || []);
+        const override = agentData.agentSkills?.[agentId];
+        setHasSkillOverride(!!override);
+        setAgentSkills(override || []);
       }
     } catch {
       console.error('Failed to load skills');
@@ -686,9 +689,9 @@ export function AgentSheet({ agentId, open, onOpenChange, onUpdated, agents }: A
                   onChange={(e) => setSkillSearch(e.target.value)}
                   className="flex-1 mr-2"
                 />
-                {agentSkills.length > 0 && (
+                {(hasSkillOverride ? agentSkills.length > 0 : skills.length > 0) && (
                   <Badge variant="secondary" className="text-xs">
-                    {agentSkills.length} enabled
+                    {hasSkillOverride ? agentSkills.length : skills.length} enabled
                   </Badge>
                 )}
               </div>
@@ -707,14 +710,14 @@ export function AgentSheet({ agentId, open, onOpenChange, onUpdated, agents }: A
               ) : (
                 <div className="space-y-4">
                   {/* Enabled skills */}
-                  {agentSkills.length > 0 && (
+                  {(!hasSkillOverride || agentSkills.length > 0) && (
                     <div>
                       <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
                         <Badge variant="default" className="text-[10px]">Enabled</Badge>
-                        {agentSkills.length} skills
+                        {hasSkillOverride ? agentSkills.length : 'All'} skills {!hasSkillOverride && <span className="text-muted-foreground font-normal">(inheriting global)</span>}
                       </h4>
                       <div className="space-y-1">
-                        {skills.filter(s => agentSkills.includes(s.name)).map(s => (
+                        {skills.filter(s => !hasSkillOverride || agentSkills.includes(s.name)).map(s => (
                           <div key={s.name} className="flex items-center justify-between py-2 px-2 rounded border text-sm bg-green-50 dark:bg-green-900/20">
                             <div className="flex-1">
                               <div className="flex items-center gap-2">
@@ -740,7 +743,7 @@ export function AgentSheet({ agentId, open, onOpenChange, onUpdated, agents }: A
                   {/* Available skills */}
                   {(() => {
                     const available = skills.filter(s => 
-                      !agentSkills.includes(s.name) && 
+                      hasSkillOverride && !agentSkills.includes(s.name) && 
                       (!skillSearch || s.name.toLowerCase().includes(skillSearch.toLowerCase()) || s.description.toLowerCase().includes(skillSearch.toLowerCase()))
                     );
                     
