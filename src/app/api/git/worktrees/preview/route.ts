@@ -3,6 +3,7 @@ import { spawn } from 'child_process';
 import fs from 'fs/promises';
 import path from 'path';
 import { getRepoPath, getWorktreeForBranch } from '@/lib/worktree-service';
+import { resolveProjectId } from '@/lib/project-resolver';
 
 interface PreviewServer {
   branch: string;
@@ -108,15 +109,16 @@ async function cleanupStaleServers() {
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
-    const project = searchParams.get('project');
+    const rawProject = searchParams.get('project');
     
-    if (!project) {
+    if (!rawProject) {
       return NextResponse.json(
         { error: 'Project parameter is required' },
         { status: 400 }
       );
     }
     
+    const project = await resolveProjectId(rawProject);
     await cleanupStaleServers();
     const servers = await loadServers();
     const projectServers = servers[project] || [];
@@ -135,14 +137,16 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { project, branch, command = 'pnpm dev', port: requestedPort } = body;
+    const { project: rawProject, branch, command = 'pnpm dev', port: requestedPort } = body;
     
-    if (!project || !branch) {
+    if (!rawProject || !branch) {
       return NextResponse.json(
         { error: 'Project and branch parameters are required' },
         { status: 400 }
       );
     }
+    
+    const project = await resolveProjectId(rawProject);
     
     // Get repository path
     const repoPath = await getRepoPath(project);
@@ -273,15 +277,16 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const body = await request.json();
-    const { project, branch } = body;
+    const { project: rawProject2, branch } = body;
     
-    if (!project || !branch) {
+    if (!rawProject2 || !branch) {
       return NextResponse.json(
         { error: 'Project and branch parameters are required' },
         { status: 400 }
       );
     }
     
+    const project = await resolveProjectId(rawProject2);
     const servers = await loadServers();
     if (!servers[project]) {
       return NextResponse.json(

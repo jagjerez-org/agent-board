@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { spawn } from 'child_process';
 import { getRepoPath, getWorktreeForBranch } from '@/lib/worktree-service';
+import { resolveProjectId } from '@/lib/project-resolver';
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -244,17 +245,18 @@ const logService = LogService.getInstance();
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
-    const project = searchParams.get('project');
+    const rawProject = searchParams.get('project');
     const branch = searchParams.get('branch');
     const commandId = searchParams.get('commandId');
     
-    if (!project || !branch) {
+    if (!rawProject || !branch) {
       return NextResponse.json(
         { error: 'Project and branch parameters are required' },
         { status: 400 }
       );
     }
 
+    const project = await resolveProjectId(rawProject);
     const key = logService['getProcessKey'](project, branch, commandId || undefined);
     const stream = logService.subscribe(key);
     
@@ -281,15 +283,16 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { project, branch, command } = body;
+    const { project: rawProject, branch, command } = body;
     
-    if (!project || !branch || !command) {
+    if (!rawProject || !branch || !command) {
       return NextResponse.json(
         { error: 'Project, branch, and command parameters are required' },
         { status: 400 }
       );
     }
     
+    const project = await resolveProjectId(rawProject);
     // Get repository path
     const repoPath = await getRepoPath(project);
     if (!repoPath) {

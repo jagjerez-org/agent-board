@@ -11,7 +11,20 @@
       "is_private": false,
       "provider": "GitHub - Jarvis",
       "owner": "jagjerez-org",
-      "updated_at": "2026-02-20T09:37:12Z"
+      "updated_at": "2026-02-20T09:45:05Z"
+    },
+    {
+      "id": "educabrera1997/ALA APP",
+      "name": "ALA APP",
+      "full_name": "educabrera1997/ALA APP",
+      "description": "",
+      "url": "https://gitlab.com/educabrera1997/ala-app",
+      "clone_url": "git@gitlab.com:educabrera1997/ala-app.git",
+      "default_branch": "main",
+      "is_private": true,
+      "provider": "GitLab",
+      "owner": "educabrera1997",
+      "updated_at": "2026-02-20T09:40:13.073Z"
     },
     {
       "id": "jagjerez-org/demo-repository",
@@ -90,19 +103,6 @@
       "provider": "GitHub - Jarvis",
       "owner": "jagjerez-org",
       "updated_at": "2026-02-19T17:17:53Z"
-    },
-    {
-      "id": "educabrera1997/ALA APP",
-      "name": "ALA APP",
-      "full_name": "educabrera1997/ALA APP",
-      "description": "",
-      "url": "https://gitlab.com/educabrera1997/ala-app",
-      "clone_url": "git@gitlab.com:educabrera1997/ala-app.git",
-      "default_branch": "main",
-      "is_private": true,
-      "provider": "GitLab",
-      "owner": "educabrera1997",
-      "updated_at": "2026-02-19T16:41:59.762Z"
     },
     {
       "id": "jagjerez-org/app_ala",
@@ -586,5 +586,5 @@
       "updated_at": "2022-05-16T06:29:09.558Z"
     }
   ],
-  "last_updated": "2026-02-20T09:39:00.376Z"
+  "last_updated": "2026-02-20T09:46:13.400Z"
 }
