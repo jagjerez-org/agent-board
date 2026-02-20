@@ -89,62 +89,31 @@ ${task.description ? `**Original Description:**\n${task.description}\n` : ''}
 
 Complete all work and file writes before finishing.`;
 
-    // Spawn agent directly via OpenClaw gateway
+    // Write pending status for heartbeat pickup
+    await writeFile(execPath, JSON.stringify({
+      status: 'pending',
+      agentId,
+      taskId: id,
+      prompt,
+      startedAt: new Date().toISOString(),
+    }, null, 2), 'utf8');
+
+    // Send wake event to OpenClaw to trigger immediate spawn
     const gateway = await getGatewayConfig();
-    if (!gateway) {
-      // Fallback to pending file for heartbeat pickup
-      await writeFile(execPath, JSON.stringify({
-        status: 'pending',
-        agentId,
-        taskId: id,
-        prompt,
-        startedAt: new Date().toISOString(),
-      }, null, 2), 'utf8');
-      return NextResponse.json({ status: 'started', agentId, note: 'Gateway not available, queued for heartbeat' });
-    }
-
-    try {
-      const spawnRes = await fetch(`${gateway.url}/api/sessions/spawn`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${gateway.token}`,
-        },
-        body: JSON.stringify({
-          task: prompt,
-          agentId,
-          label: `exec-${id.slice(0, 8)}`,
-        }),
-      });
-
-      if (!spawnRes.ok) {
-        throw new Error(`Gateway spawn failed: ${spawnRes.status}`);
+    if (gateway) {
+      try {
+        const wakeText = `[Agent Board] Execution requested for task ${id}. Check /tmp/agent-board/data/executions/ for pending executions and spawn agents for them.`;
+        await fetch(`${gateway.url}/api/v1/cron/wake`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${gateway.token}` },
+          body: JSON.stringify({ text: wakeText, mode: 'now' }),
+        });
+      } catch (err: unknown) {
+        console.error('Wake event failed (will be picked up by heartbeat):', err);
       }
-
-      const spawnData = await spawnRes.json();
-
-      await writeFile(execPath, JSON.stringify({
-        status: 'spawned',
-        agentId,
-        taskId: id,
-        prompt,
-        startedAt: new Date().toISOString(),
-        spawnedAt: new Date().toISOString(),
-        sessionKey: spawnData.childSessionKey || null,
-      }, null, 2), 'utf8');
-
-      return NextResponse.json({ status: 'spawned', agentId, sessionKey: spawnData.childSessionKey });
-    } catch (spawnErr: any) {
-      console.error('Direct spawn failed, falling back to pending:', spawnErr.message);
-      await writeFile(execPath, JSON.stringify({
-        status: 'pending',
-        agentId,
-        taskId: id,
-        prompt,
-        startedAt: new Date().toISOString(),
-      }, null, 2), 'utf8');
-      return NextResponse.json({ status: 'started', agentId, note: 'Queued for heartbeat (direct spawn failed)' });
     }
+
+    return NextResponse.json({ status: 'started', agentId });
   } catch (error: any) {
     console.error('Execute error:', error);
     return NextResponse.json({ error: error.message || 'Failed' }, { status: 500 });

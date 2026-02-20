@@ -125,28 +125,25 @@ Also update the task file by reading and updating: ${join(process.cwd(), 'data',
 
 Be concise and specific. Do all file writes before finishing.`;
 
-    // Spawn agent directly via OpenClaw gateway
+    // Write pending status with prompt so heartbeat/wake can pick it up
+    await writeFile(refinePath, JSON.stringify({ status: 'pending', agentId, taskId: id, prompt, startedAt: new Date().toISOString() }, null, 2), 'utf8');
+
+    // Send wake event to OpenClaw main session to trigger immediate spawn
     const gateway = await getGatewayConfig();
-    if (!gateway) {
-      await writeFile(refinePath, JSON.stringify({ status: 'pending', agentId, taskId: id, prompt, startedAt: new Date().toISOString() }, null, 2), 'utf8');
-      return NextResponse.json({ status: 'started', agentId });
+    if (gateway) {
+      try {
+        const wakeText = `[Agent Board] Refinement requested for task ${id}. Check /tmp/agent-board/data/refinements/ for pending refinements and spawn agents for them.`;
+        await fetch(`${gateway.url}/api/v1/cron/wake`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${gateway.token}` },
+          body: JSON.stringify({ text: wakeText, mode: 'now' }),
+        });
+      } catch (err: unknown) {
+        console.error('Wake event failed (will be picked up by heartbeat):', err);
+      }
     }
 
-    try {
-      const spawnRes = await fetch(`${gateway.url}/api/sessions/spawn`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${gateway.token}` },
-        body: JSON.stringify({ task: prompt, agentId, label: `refine-${id.slice(0, 8)}` }),
-      });
-      if (!spawnRes.ok) throw new Error(`Spawn failed: ${spawnRes.status}`);
-      const spawnData = await spawnRes.json();
-      await writeFile(refinePath, JSON.stringify({ status: 'spawned', agentId, taskId: id, prompt, startedAt: new Date().toISOString(), spawnedAt: new Date().toISOString(), sessionKey: spawnData.childSessionKey }, null, 2), 'utf8');
-      return NextResponse.json({ status: 'spawned', agentId, sessionKey: spawnData.childSessionKey });
-    } catch (err: any) {
-      console.error('Direct spawn failed, queuing:', err.message);
-      await writeFile(refinePath, JSON.stringify({ status: 'pending', agentId, taskId: id, prompt, startedAt: new Date().toISOString() }, null, 2), 'utf8');
-      return NextResponse.json({ status: 'started', agentId });
-    }
+    return NextResponse.json({ status: 'started', agentId });
   } catch (error: any) {
     console.error('Refine error:', error);
     return NextResponse.json({ error: error.message || 'Failed' }, { status: 500 });
