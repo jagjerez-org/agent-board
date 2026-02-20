@@ -110,6 +110,15 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
   // Per-worktree expanded panels
   const [expandedPreviews, setExpandedPreviews] = useState<Set<string>>(new Set());
   const [expandedLogs, setExpandedLogs] = useState<Set<string>>(new Set());
+  const [expandedEditors, setExpandedEditors] = useState<Set<string>>(new Set());
+
+  const toggleEditor = (branch: string) => {
+    setExpandedEditors(prev => {
+      const n = new Set(prev);
+      if (n.has(branch)) n.delete(branch); else n.add(branch);
+      return n;
+    });
+  };
   
   // Per-worktree logs
   const [logs, setLogs] = useState<Map<string, LogEntry[]>>(new Map());
@@ -638,14 +647,13 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
                               </Button>
                               
                               <Button 
-                                variant="outline" 
+                                variant={expandedEditors.has(wt.branch) ? 'default' : 'outline'}
                                 size="sm" 
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  const editorUrl = `/editor?project=${selectedProject}&branch=${wt.branch}`;
-                                  window.open(editorUrl, '_blank');
+                                  toggleEditor(wt.branch);
                                 }} 
-                                title="Open in Monaco Editor"
+                                title="Code Editor"
                               >
                                 <FolderOpen className="w-4 h-4" />
                               </Button>
@@ -846,6 +854,31 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
                                   ))
                                 )}
                               </div>
+                            </div>
+                          )}
+
+                          {/* Editor panel (expanded) */}
+                          {expandedEditors.has(wt.branch) && (
+                            <div className="border rounded-lg overflow-hidden">
+                              <div className="flex items-center justify-between px-3 py-2 bg-muted/50 border-b">
+                                <span className="text-sm font-medium flex items-center gap-2">
+                                  <FolderOpen className="w-4 h-4" /> Code Editor
+                                </span>
+                                <div className="flex items-center gap-1">
+                                  <Button variant="ghost" size="sm" onClick={() => {
+                                    const editorUrl = `/editor?project=${selectedProject}&branch=${wt.branch}`;
+                                    window.open(editorUrl, '_blank');
+                                  }} title="Open in full page">
+                                    <ExternalLink className="w-3 h-3" />
+                                  </Button>
+                                </div>
+                              </div>
+                              <iframe
+                                src={`/editor?project=${encodeURIComponent(selectedProject)}&branch=${encodeURIComponent(wt.branch)}&embedded=true`}
+                                className="w-full border-0"
+                                style={{ height: '500px' }}
+                                title={`Editor: ${wt.branch}`}
+                              />
                             </div>
                           )}
                         </CardContent>
