@@ -640,7 +640,8 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
                               <Button 
                                 variant="outline" 
                                 size="sm" 
-                                onClick={() => {
+                                onClick={(e) => {
+                                  e.stopPropagation();
                                   const editorUrl = `/editor?project=${selectedProject}&branch=${wt.branch}`;
                                   window.open(editorUrl, '_blank');
                                 }} 

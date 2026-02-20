@@ -374,5 +374,35 @@
     "status": "completed",
     "startedAt": "2026-02-20T12:54:25.858Z",
     "exitCode": 0
+  },
+  {
+    "id": "1771593199140-ta5bo6z06",
+    "project": "hubdance/kadens",
+    "branch": "feat/review_kadens_jgodoy_20260220",
+    "command": "pnpm install",
+    "pid": 128043,
+    "status": "completed",
+    "startedAt": "2026-02-20T13:13:19.140Z",
+    "exitCode": 0
+  },
+  {
+    "id": "1771593217360-a3i40ht0j",
+    "project": "hubdance/kadens",
+    "branch": "feat/review_kadens_jgodoy_20260220",
+    "command": "pnpm docker:dev",
+    "pid": 128611,
+    "status": "completed",
+    "startedAt": "2026-02-20T13:13:37.360Z",
+    "exitCode": 1
+  },
+  {
+    "id": "1771593226653-plmv08m7v",
+    "project": "hubdance/kadens",
+    "branch": "feat/review_kadens_jgodoy_20260220",
+    "command": "pnpm docker:dev:up",
+    "pid": 128870,
+    "status": "completed",
+    "startedAt": "2026-02-20T13:13:46.653Z",
+    "exitCode": 1
   }
 ]
