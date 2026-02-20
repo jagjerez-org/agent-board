@@ -4,7 +4,7 @@ import { useState, useRef } from 'react';
 import { KanbanBoard } from '@/components/board/kanban-board-simple';
 import { ProjectSelector } from '@/components/board/project-selector';
 import { Button } from '@/components/ui/button';
-import { Plus, Settings, Activity, Users, FolderOpen, GitBranch } from 'lucide-react';
+import { Plus, Settings, Activity, Users, FolderOpen, GitBranch, Wrench } from 'lucide-react';
 import Link from 'next/link';
 import {
   Sheet,
@@ -39,6 +39,12 @@ export default function BoardPage() {
                 <Link href="/agents">
                   <Users className="w-4 h-4 mr-2" />
                   Agents
+                </Link>
+              </Button>
+              <Button variant="ghost" size="sm" asChild>
+                <Link href="/skills">
+                  <Wrench className="w-4 h-4 mr-2" />
+                  Skills
                 </Link>
               </Button>
               <Button variant="ghost" size="sm" asChild>

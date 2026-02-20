@@ -60,7 +60,7 @@ export async function GET() {
     const workspace = await discoverSkills(workspaceDir, 'workspace');
     
     // Read openclaw.json for agent-specific skill configs
-    let agentSkills: Record<string, string[]> = {};
+    const agentSkills: Record<string, string[]> = {};
     try {
       const configPath = path.join(homeDir, '.openclaw/openclaw.json');
       const config = JSON.parse(await fs.readFile(configPath, 'utf8'));

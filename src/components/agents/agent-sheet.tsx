@@ -22,6 +22,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Trash2, Pencil, Save, FileText, Terminal, RefreshCw } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Switch } from '@/components/ui/switch';
 
 const MODELS = [
   'anthropic/claude-opus-4-6',
@@ -103,6 +104,8 @@ export function AgentSheet({ agentId, open, onOpenChange, onUpdated, agents }: A
   const [skills, setSkills] = useState<SkillInfo[]>([]);
   const [skillsLoading, setSkillsLoading] = useState(false);
   const [skillSearch, setSkillSearch] = useState('');
+  const [agentSkills, setAgentSkills] = useState<string[]>([]);
+  const [updatingSkills, setUpdatingSkills] = useState(false);
 
   // Live status
   const [liveStatus, setLiveStatus] = useState<LiveStatus | null>(null);
@@ -212,6 +215,13 @@ export function AgentSheet({ agentId, open, onOpenChange, onUpdated, agents }: A
       const res = await fetch('/api/skills');
       const data = await res.json();
       setSkills([...(data.builtin || []), ...(data.workspace || [])]);
+      
+      // Load agent-specific skills
+      if (agentId) {
+        const agentRes = await fetch('/api/skills/agents');
+        const agentData = await agentRes.json();
+        setAgentSkills(agentData.agentSkills?.[agentId] || []);
+      }
     } catch {
       console.error('Failed to load skills');
     } finally {
@@ -227,6 +237,35 @@ export function AgentSheet({ agentId, open, onOpenChange, onUpdated, agents }: A
       const agentLive = (data.agents || []).find((a: LiveStatus & { id: string }) => a.id === agentId);
       if (agentLive) setLiveStatus(agentLive);
     } catch { /* ignore */ }
+  };
+
+  const toggleSkill = async (skillName: string) => {
+    if (!agentId) return;
+    
+    const newSkills = agentSkills.includes(skillName)
+      ? agentSkills.filter(s => s !== skillName)
+      : [...agentSkills, skillName];
+    
+    setUpdatingSkills(true);
+    try {
+      const res = await fetch('/api/skills/agents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agentId,
+          skills: newSkills
+        })
+      });
+      
+      if (!res.ok) throw new Error('Failed to update skills');
+      
+      setAgentSkills(newSkills);
+    } catch (error) {
+      console.error('Failed to update agent skills:', error);
+      alert('Failed to update agent skills');
+    } finally {
+      setUpdatingSkills(false);
+    }
   };
 
   // Auto-refresh logs
@@ -640,11 +679,26 @@ export function AgentSheet({ agentId, open, onOpenChange, onUpdated, agents }: A
             </TabsContent>
 
             <TabsContent value="skills" className="space-y-4">
-              <Input
-                placeholder="Search skills..."
-                value={skillSearch}
-                onChange={(e) => setSkillSearch(e.target.value)}
-              />
+              <div className="flex items-center justify-between">
+                <Input
+                  placeholder="Search skills..."
+                  value={skillSearch}
+                  onChange={(e) => setSkillSearch(e.target.value)}
+                  className="flex-1 mr-2"
+                />
+                {agentSkills.length > 0 && (
+                  <Badge variant="secondary" className="text-xs">
+                    {agentSkills.length} enabled
+                  </Badge>
+                )}
+              </div>
+              
+              {updatingSkills && (
+                <div className="text-xs text-muted-foreground text-center py-2">
+                  Updating skills...
+                </div>
+              )}
+              
               {skillsLoading ? (
                 <div className="flex items-center justify-center gap-2 py-8 text-muted-foreground">
                   <RefreshCw className="w-4 h-4 animate-spin" />
@@ -652,52 +706,115 @@ export function AgentSheet({ agentId, open, onOpenChange, onUpdated, agents }: A
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {/* Workspace skills */}
-                  {(() => {
-                    const ws = skills.filter(s => s.source === 'workspace' && (!skillSearch || s.name.toLowerCase().includes(skillSearch.toLowerCase())));
-                    return ws.length > 0 ? (
-                      <div>
-                        <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
-                          <Badge variant="default" className="text-[10px]">Workspace</Badge>
-                          {ws.length} skills
-                        </h4>
-                        <div className="space-y-1">
-                          {ws.map(s => (
-                            <div key={s.name} className="flex items-center justify-between py-1.5 px-2 rounded border text-sm hover:bg-muted/50">
-                              <div>
+                  {/* Enabled skills */}
+                  {agentSkills.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+                        <Badge variant="default" className="text-[10px]">Enabled</Badge>
+                        {agentSkills.length} skills
+                      </h4>
+                      <div className="space-y-1">
+                        {skills.filter(s => agentSkills.includes(s.name)).map(s => (
+                          <div key={s.name} className="flex items-center justify-between py-2 px-2 rounded border text-sm bg-green-50 dark:bg-green-900/20">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
                                 <span className="font-medium">{s.name}</span>
-                                {s.description && <p className="text-xs text-muted-foreground truncate max-w-[300px]">{s.description}</p>}
+                                <Badge variant={s.source === 'workspace' ? 'default' : 'outline'} className="text-[10px]">
+                                  {s.source}
+                                </Badge>
                               </div>
+                              {s.description && <p className="text-xs text-muted-foreground truncate max-w-[300px]">{s.description}</p>}
                             </div>
-                          ))}
-                        </div>
+                            <Switch
+                              checked={true}
+                              onCheckedChange={() => toggleSkill(s.name)}
+                              disabled={updatingSkills}
+                              className="ml-2"
+                            />
+                          </div>
+                        ))}
                       </div>
-                    ) : null;
-                  })()}
-                  {/* Built-in skills */}
+                    </div>
+                  )}
+                  
+                  {/* Available skills */}
                   {(() => {
-                    const bi = skills.filter(s => s.source === 'builtin' && (!skillSearch || s.name.toLowerCase().includes(skillSearch.toLowerCase())));
-                    return bi.length > 0 ? (
-                      <div>
-                        <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
-                          <Badge variant="outline" className="text-[10px]">Built-in</Badge>
-                          {bi.length} skills
-                        </h4>
-                        <div className="space-y-1">
-                          {bi.map(s => (
-                            <div key={s.name} className="flex items-center justify-between py-1.5 px-2 rounded border text-sm hover:bg-muted/50">
-                              <div>
-                                <span className="font-medium">{s.name}</span>
-                                {s.description && <p className="text-xs text-muted-foreground truncate max-w-[300px]">{s.description}</p>}
-                              </div>
+                    const available = skills.filter(s => 
+                      !agentSkills.includes(s.name) && 
+                      (!skillSearch || s.name.toLowerCase().includes(skillSearch.toLowerCase()) || s.description.toLowerCase().includes(skillSearch.toLowerCase()))
+                    );
+                    
+                    const ws = available.filter(s => s.source === 'workspace');
+                    const bi = available.filter(s => s.source === 'builtin');
+                    
+                    return (
+                      <>
+                        {/* Available Workspace skills */}
+                        {ws.length > 0 && (
+                          <div>
+                            <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+                              <Badge variant="default" className="text-[10px]">Workspace</Badge>
+                              {ws.length} available
+                            </h4>
+                            <div className="space-y-1">
+                              {ws.map(s => (
+                                <div key={s.name} className="flex items-center justify-between py-2 px-2 rounded border text-sm hover:bg-muted/50">
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-medium">{s.name}</span>
+                                      <Badge variant="default" className="text-[10px]">workspace</Badge>
+                                    </div>
+                                    {s.description && <p className="text-xs text-muted-foreground truncate max-w-[250px]">{s.description}</p>}
+                                  </div>
+                                  <Switch
+                                    checked={false}
+                                    onCheckedChange={() => toggleSkill(s.name)}
+                                    disabled={updatingSkills}
+                                    className="ml-2"
+                                  />
+                                </div>
+                              ))}
                             </div>
-                          ))}
-                        </div>
-                      </div>
-                    ) : null;
+                          </div>
+                        )}
+                        
+                        {/* Available Built-in skills */}
+                        {bi.length > 0 && (
+                          <div>
+                            <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+                              <Badge variant="outline" className="text-[10px]">Built-in</Badge>
+                              {bi.length} available
+                            </h4>
+                            <div className="space-y-1">
+                              {bi.map(s => (
+                                <div key={s.name} className="flex items-center justify-between py-2 px-2 rounded border text-sm hover:bg-muted/50">
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-medium">{s.name}</span>
+                                      <Badge variant="outline" className="text-[10px]">builtin</Badge>
+                                    </div>
+                                    {s.description && <p className="text-xs text-muted-foreground truncate max-w-[250px]">{s.description}</p>}
+                                  </div>
+                                  <Switch
+                                    checked={false}
+                                    onCheckedChange={() => toggleSkill(s.name)}
+                                    disabled={updatingSkills}
+                                    className="ml-2"
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    );
                   })()}
+                  
                   {skills.length > 0 && (
-                    <p className="text-xs text-muted-foreground text-center">{skills.length} total skills available</p>
+                    <div className="text-xs text-muted-foreground text-center pt-4 border-t">
+                      <p>{skills.length} total skills • {agentSkills.length} enabled for this agent</p>
+                      <p className="mt-1">Use toggles to enable/disable skills for this agent</p>
+                    </div>
                   )}
                 </div>
               )}
