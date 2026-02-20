@@ -1,6 +1,19 @@
 {
   "repos": [
     {
+      "id": "jagjerez-org/agent-board",
+      "name": "agent-board",
+      "full_name": "jagjerez-org/agent-board",
+      "description": "A Trello-like kanban board designed for AI agent orchestration with OpenClaw. Features file-based storage, drag & drop interface, and full API.",
+      "url": "https://github.com/jagjerez-org/agent-board",
+      "clone_url": "https://github.com/jagjerez-org/agent-board.git",
+      "default_branch": "main",
+      "is_private": false,
+      "provider": "GitHub - Jarvis",
+      "owner": "jagjerez-org",
+      "updated_at": "2026-02-20T15:22:32Z"
+    },
+    {
       "id": "hubdance/kadens",
       "name": "kadens",
       "full_name": "hubdance/kadens",
@@ -12,19 +25,6 @@
       "provider": "GitHub - Jarvis",
       "owner": "hubdance",
       "updated_at": "2026-02-20T14:53:13Z"
-    },
-    {
-      "id": "jagjerez-org/agent-board",
-      "name": "agent-board",
-      "full_name": "jagjerez-org/agent-board",
-      "description": "A Trello-like kanban board designed for AI agent orchestration with OpenClaw. Features file-based storage, drag & drop interface, and full API.",
-      "url": "https://github.com/jagjerez-org/agent-board",
-      "clone_url": "https://github.com/jagjerez-org/agent-board.git",
-      "default_branch": "main",
-      "is_private": false,
-      "provider": "GitHub - Jarvis",
-      "owner": "jagjerez-org",
-      "updated_at": "2026-02-20T14:47:46Z"
     },
     {
       "id": "AmericanLanguage-IT/Aula",
@@ -586,5 +586,5 @@
       "updated_at": "2022-05-16T06:29:09.558Z"
     }
   ],
-  "last_updated": "2026-02-20T15:19:19.478Z"
+  "last_updated": "2026-02-20T15:55:02.223Z"
 }

@@ -32,10 +32,10 @@
     {
       "branch": "feat/review_kadens_jgodoy",
       "port": 3200,
-      "pid": 59938,
+      "pid": 69065,
       "status": "stopped",
-      "startedAt": "2026-02-20T15:20:27.401Z",
-      "command": "cd apps/web && pnpm run dev -- -H 0.0.0.0",
+      "startedAt": "2026-02-20T15:24:48.036Z",
+      "command": "make dev -- --hostname 0.0.0.0",
       "project": "hubdance/kadens"
     }
   ]

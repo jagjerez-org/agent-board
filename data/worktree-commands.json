@@ -584,5 +584,65 @@
     "status": "completed",
     "startedAt": "2026-02-20T15:09:14.501Z",
     "exitCode": 0
+  },
+  {
+    "id": "1771601143348-n68a66tuu",
+    "project": "hubdance/kadens",
+    "branch": "feat/review_kadens_jgodoy",
+    "command": "make dev -- --hostname 0.0.0.0",
+    "pid": 72695,
+    "status": "completed",
+    "startedAt": "2026-02-20T15:25:43.348Z",
+    "exitCode": 2
+  },
+  {
+    "id": "1771601168388-nx0vlebrk",
+    "project": "hubdance/kadens",
+    "branch": "feat/review_kadens_jgodoy",
+    "command": "pnpm reset",
+    "pid": 74914,
+    "status": "completed",
+    "startedAt": "2026-02-20T15:26:08.388Z",
+    "exitCode": null
+  },
+  {
+    "id": "1771601180987-5jogwrfzv",
+    "project": "hubdance/kadens",
+    "branch": "feat/review_kadens_jgodoy",
+    "command": "make dev -- --hostname 0.0.0.0",
+    "pid": 75387,
+    "status": "completed",
+    "startedAt": "2026-02-20T15:26:20.987Z",
+    "exitCode": 2
+  },
+  {
+    "id": "1771602939472-5omq2fde3",
+    "project": "hubdance/kadens",
+    "branch": "feat/review_kadens_jgodoy",
+    "command": "make dev -- --hostname 0.0.0.0",
+    "pid": 136108,
+    "status": "completed",
+    "startedAt": "2026-02-20T15:55:39.472Z",
+    "exitCode": 2
+  },
+  {
+    "id": "1771603098353-pho15p085",
+    "project": "hubdance/kadens",
+    "branch": "feat/review_kadens_jgodoy",
+    "command": "make dev",
+    "pid": 142837,
+    "status": "completed",
+    "startedAt": "2026-02-20T15:58:18.353Z",
+    "exitCode": 2
+  },
+  {
+    "id": "1771603193806-pf2po26ye",
+    "project": "hubdance/kadens",
+    "branch": "feat/review_kadens_jgodoy",
+    "command": "pnpm dev",
+    "pid": 147458,
+    "status": "completed",
+    "startedAt": "2026-02-20T15:59:53.806Z",
+    "exitCode": 1
   }
 ]

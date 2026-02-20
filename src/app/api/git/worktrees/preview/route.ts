@@ -192,7 +192,9 @@ export async function POST(request: NextRequest) {
       `${homeDir}/.local/bin`,
       '/usr/local/bin',
     ].join(':');
-    const env = { ...process.env, PORT: port.toString(), HOST: '0.0.0.0', HOSTNAME: '0.0.0.0', NODE_ENV: 'development', PATH: `${extraPaths}:${process.env.PATH}` };
+    // Remove Agent Board's own PORT before setting the preview port
+    const { PORT: _abPort, ...cleanEnv } = process.env;
+    const env = { ...cleanEnv, PORT: port.toString(), HOST: '0.0.0.0', HOSTNAME: '0.0.0.0', NODE_ENV: 'development', PATH: `${extraPaths}:${process.env.PATH}` };
 
     // Patch command to bind to 0.0.0.0 for LAN access
     let finalCommand = command;

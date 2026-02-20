@@ -346,7 +346,9 @@ export async function POST(request: NextRequest) {
       `${homeDir}/.local/bin`,
       '/usr/local/bin',
     ].join(':');
-    const env = { ...process.env, NODE_ENV: 'development', PATH: `${extraPaths}:${process.env.PATH}` };
+    // Remove Agent Board's PORT to avoid polluting child processes
+    const { PORT: _port, ...cleanEnv } = process.env;
+    const env = { ...cleanEnv, NODE_ENV: 'development', PATH: `${extraPaths}:${process.env.PATH}` };
     
     // Spawn the command
     const childProcess = spawn('bash', ['-c', command], {
