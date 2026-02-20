@@ -2,12 +2,17 @@
 
 import React, { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Editor } from '@monaco-editor/react';
+import { Editor, type Monaco } from '@monaco-editor/react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Separator } from '@/components/ui/separator';
+import { Input } from '@/components/ui/input';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import {
   Folder,
   FolderOpen,
@@ -25,6 +30,9 @@ import {
   Archive,
   AlertCircle,
   Dot,
+  FolderPlus,
+  FilePlus,
+  RefreshCw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -43,65 +51,25 @@ interface OpenFile {
   isUnsaved: boolean;
 }
 
-// File extension to language mapping
 const getLanguageFromExtension = (filename: string): string => {
   const ext = filename.split('.').pop()?.toLowerCase();
-  const languageMap: { [key: string]: string } = {
-    'ts': 'typescript',
-    'tsx': 'typescript',
-    'js': 'javascript',
-    'jsx': 'javascript',
-    'dart': 'dart',
-    'json': 'json',
-    'yaml': 'yaml',
-    'yml': 'yaml',
-    'md': 'markdown',
-    'markdown': 'markdown',
-    'html': 'html',
-    'css': 'css',
-    'scss': 'scss',
-    'sass': 'sass',
-    'less': 'less',
-    'xml': 'xml',
-    'svg': 'xml',
-    'sql': 'sql',
-    'py': 'python',
-    'rb': 'ruby',
-    'go': 'go',
-    'rs': 'rust',
-    'java': 'java',
-    'c': 'c',
-    'cpp': 'cpp',
-    'h': 'c',
-    'hpp': 'cpp',
-    'cs': 'csharp',
-    'php': 'php',
-    'sh': 'shell',
-    'bash': 'shell',
-    'zsh': 'shell',
-    'ps1': 'powershell',
-    'dockerfile': 'dockerfile',
-    'toml': 'toml',
-    'ini': 'ini',
-    'cfg': 'ini',
-    'conf': 'ini',
-    'lock': 'text',
-    'log': 'text',
-    'txt': 'text',
+  const map: Record<string, string> = {
+    'ts': 'typescript', 'tsx': 'typescriptreact', 'js': 'javascript', 'jsx': 'javascriptreact',
+    'dart': 'dart', 'json': 'json', 'yaml': 'yaml', 'yml': 'yaml',
+    'md': 'markdown', 'html': 'html', 'css': 'css', 'scss': 'scss',
+    'less': 'less', 'xml': 'xml', 'svg': 'xml', 'sql': 'sql',
+    'py': 'python', 'go': 'go', 'rs': 'rust', 'java': 'java',
+    'sh': 'shell', 'bash': 'shell', 'dockerfile': 'dockerfile',
+    'toml': 'toml', 'ini': 'ini', 'txt': 'text', 'log': 'text',
   };
-  return languageMap[ext || ''] || 'text';
+  return map[ext || ''] || 'text';
 };
 
-// File extension to icon mapping
 const getFileIcon = (filename: string) => {
   const ext = filename.split('.').pop()?.toLowerCase();
-  const name = filename.toLowerCase();
-  
-  if (name.includes('package.json') || name.includes('pubspec.yaml')) {
+  if (filename.includes('package.json') || filename.includes('pubspec.yaml'))
     return <Settings className="w-4 h-4 text-blue-600" />;
-  }
-  
-  const iconMap: { [key: string]: React.ReactElement } = {
+  const map: Record<string, React.ReactElement> = {
     'ts': <Code className="w-4 h-4 text-blue-600" />,
     'tsx': <Code className="w-4 h-4 text-blue-600" />,
     'js': <Code className="w-4 h-4 text-yellow-600" />,
@@ -111,85 +79,73 @@ const getFileIcon = (filename: string) => {
     'yaml': <Settings className="w-4 h-4 text-purple-600" />,
     'yml': <Settings className="w-4 h-4 text-purple-600" />,
     'md': <FileText className="w-4 h-4 text-gray-600" />,
-    'markdown': <FileText className="w-4 h-4 text-gray-600" />,
     'html': <Code className="w-4 h-4 text-orange-600" />,
     'css': <Code className="w-4 h-4 text-blue-500" />,
     'scss': <Code className="w-4 h-4 text-pink-600" />,
     'png': <Image className="w-4 h-4 text-green-600" />,
     'jpg': <Image className="w-4 h-4 text-green-600" />,
-    'jpeg': <Image className="w-4 h-4 text-green-600" />,
-    'gif': <Image className="w-4 h-4 text-green-600" />,
     'svg': <Image className="w-4 h-4 text-purple-600" />,
     'zip': <Archive className="w-4 h-4 text-gray-600" />,
-    'tar': <Archive className="w-4 h-4 text-gray-600" />,
-    'gz': <Archive className="w-4 h-4 text-gray-600" />,
   };
-  
-  return iconMap[ext || ''] || <File className="w-4 h-4 text-gray-500" />;
+  return map[ext || ''] || <File className="w-4 h-4 text-gray-500" />;
 };
 
-// File tree component
-function FileTreeNode({ 
-  node, 
-  onFileSelect, 
-  expandedDirs, 
-  onToggleDir,
-  level = 0 
+function FileTreeNode({
+  node, onFileSelect, onContextAction, expandedDirs, onToggleDir, selectedFile, level = 0,
 }: {
   node: TreeNode;
   onFileSelect: (path: string) => void;
+  onContextAction: (action: 'newFile' | 'newFolder', dirPath: string) => void;
   expandedDirs: Set<string>;
   onToggleDir: (path: string) => void;
+  selectedFile: string;
   level?: number;
 }) {
+  const [hovered, setHovered] = useState(false);
   const isExpanded = expandedDirs.has(node.path);
-  
+
   if (node.type === 'file') {
     return (
       <div
-        className="flex items-center gap-2 py-1 px-2 hover:bg-muted/50 cursor-pointer text-sm rounded"
+        className={cn(
+          "flex items-center gap-2 py-1 px-2 cursor-pointer text-sm rounded",
+          selectedFile === node.path ? "bg-accent text-accent-foreground" : "hover:bg-muted/50"
+        )}
         style={{ paddingLeft: `${8 + level * 16}px` }}
         onClick={() => onFileSelect(node.path)}
       >
         {getFileIcon(node.name)}
-        <span className="truncate">{node.name}</span>
+        <span className="truncate flex-1">{node.name}</span>
       </div>
     );
   }
-  
+
   return (
     <div>
       <div
         className="flex items-center gap-2 py-1 px-2 hover:bg-muted/50 cursor-pointer text-sm rounded"
         style={{ paddingLeft: `${8 + level * 16}px` }}
         onClick={() => onToggleDir(node.path)}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
       >
-        {isExpanded ? (
-          <ChevronDown className="w-4 h-4 text-muted-foreground" />
-        ) : (
-          <ChevronRight className="w-4 h-4 text-muted-foreground" />
+        {isExpanded ? <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" /> : <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />}
+        {isExpanded ? <FolderOpen className="w-4 h-4 text-blue-600 shrink-0" /> : <Folder className="w-4 h-4 text-blue-600 shrink-0" />}
+        <span className="truncate flex-1 font-medium">{node.name}</span>
+        {hovered && (
+          <div className="flex items-center gap-0.5 shrink-0" onClick={e => e.stopPropagation()}>
+            <button className="p-0.5 hover:bg-muted rounded" title="New File" onClick={() => onContextAction('newFile', node.path)}>
+              <FilePlus className="w-3.5 h-3.5 text-muted-foreground" />
+            </button>
+            <button className="p-0.5 hover:bg-muted rounded" title="New Folder" onClick={() => onContextAction('newFolder', node.path)}>
+              <FolderPlus className="w-3.5 h-3.5 text-muted-foreground" />
+            </button>
+          </div>
         )}
-        {isExpanded ? (
-          <FolderOpen className="w-4 h-4 text-blue-600" />
-        ) : (
-          <Folder className="w-4 h-4 text-blue-600" />
-        )}
-        <span className="truncate font-medium">{node.name}</span>
       </div>
-      {isExpanded && node.children && (
-        <div>
-          {node.children.map((child) => (
-            <FileTreeNode
-              key={child.path}
-              node={child}
-              onFileSelect={onFileSelect}
-              expandedDirs={expandedDirs}
-              onToggleDir={onToggleDir}
-              level={level + 1}
-            />
-          ))}
-        </div>
-      )}
+      {isExpanded && node.children && node.children.map(child => (
+        <FileTreeNode key={child.path} node={child} onFileSelect={onFileSelect} onContextAction={onContextAction} expandedDirs={expandedDirs} onToggleDir={onToggleDir} selectedFile={selectedFile} level={level + 1} />
+      ))}
     </div>
   );
 }
@@ -198,420 +154,270 @@ function EditorPageContent() {
   const searchParams = useSearchParams();
   const [tree, setTree] = useState<TreeNode[]>([]);
   const [openFiles, setOpenFiles] = useState<OpenFile[]>([]);
-  const [activeFile, setActiveFile] = useState<string>('');
+  const [activeFile, setActiveFile] = useState('');
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string>('');
-  const [projectPath, setProjectPath] = useState<string>('');
+  const [error, setError] = useState('');
+  const [projectPath, setProjectPath] = useState('');
   const [sidebarWidth, setSidebarWidth] = useState(250);
   const [isResizing, setIsResizing] = useState(false);
-  
-  const resizeRef = useRef<HTMLDivElement>(null);
+  const [createDialog, setCreateDialog] = useState<{ open: boolean; type: 'file' | 'folder'; parentPath: string }>({ open: false, type: 'file', parentPath: '' });
+  const [newName, setNewName] = useState('');
   const editorRef = useRef<any>(null);
-  
-  // Initialize project path from URL params
+
   useEffect(() => {
     const project = searchParams.get('project');
     const branch = searchParams.get('branch');
     const path = searchParams.get('path');
-    
-    if (path) {
-      setProjectPath(path);
-    } else if (project && branch) {
-      // Resolve worktree path via API
+    if (path) { setProjectPath(path); }
+    else if (project && branch) {
       fetch(`/api/git/worktrees?project=${encodeURIComponent(project)}`)
         .then(r => r.json())
         .then(data => {
-          const worktrees = data.worktrees || [];
-          const wt = worktrees.find((w: { branch: string }) => w.branch === branch);
-          if (wt?.path) {
-            setProjectPath(wt.path);
-          } else {
-            // Fallback: try common patterns
-            const slug = branch.replace(/\//g, '-');
-            const projectName = project.split('-').slice(1).join('-').toLowerCase().replace(/\s+/g, '-');
-            setProjectPath(`/tmp/${projectName}-worktrees/${slug}`);
-          }
+          const wt = (data.worktrees || []).find((w: { branch: string }) => w.branch === branch);
+          if (wt?.path) setProjectPath(wt.path);
         })
         .catch(() => setError('Failed to resolve worktree path'));
-    } else {
-      setError('No project path specified. Use ?project=X&branch=Y or ?path=/tmp/some-worktree');
-    }
+    } else { setError('No project path specified'); }
   }, [searchParams]);
-  
-  // Load file tree
+
   const loadTree = useCallback(async () => {
     if (!projectPath) return;
-    
-    setLoading(true);
-    setError('');
-    
+    setLoading(true); setError('');
     try {
-      const response = await fetch(`/api/files/tree?path=${encodeURIComponent(projectPath)}&depth=2`);
-      const data = await response.json();
-      
-      if (response.ok) {
-        setTree(data.tree || []);
-      } else {
-        setError(data.error || 'Failed to load file tree');
-      }
-    } catch (err) {
-      setError('Network error loading file tree');
-      console.error('Tree load error:', err);
-    } finally {
-      setLoading(false);
-    }
+      const r = await fetch(`/api/files/tree?path=${encodeURIComponent(projectPath)}&depth=3`);
+      const data = await r.json();
+      if (r.ok) setTree(data.tree || []);
+      else setError(data.error || 'Failed');
+    } catch { setError('Network error'); }
+    finally { setLoading(false); }
   }, [projectPath]);
-  
-  // Load file tree when project path changes
-  useEffect(() => {
-    loadTree();
-  }, [loadTree]);
-  
-  // Handle file selection
+
+  useEffect(() => { loadTree(); }, [loadTree]);
+
   const handleFileSelect = async (filePath: string) => {
-    // Check if file is already open
-    const existingFile = openFiles.find(f => f.path === filePath);
-    if (existingFile) {
-      setActiveFile(filePath);
-      return;
-    }
-    
+    if (openFiles.find(f => f.path === filePath)) { setActiveFile(filePath); return; }
     try {
-      const response = await fetch(`/api/files/content?path=${encodeURIComponent(filePath)}`);
-      const data = await response.json();
-      
-      if (response.ok) {
+      const r = await fetch(`/api/files/content?path=${encodeURIComponent(filePath)}`);
+      const data = await r.json();
+      if (r.ok) {
         const language = getLanguageFromExtension(filePath.split('/').pop() || '');
-        const newFile: OpenFile = {
-          path: filePath,
-          content: data.content,
-          originalContent: data.content,
-          language,
-          isUnsaved: false
-        };
-        
-        setOpenFiles(prev => [...prev, newFile]);
+        setOpenFiles(prev => [...prev, { path: filePath, content: data.content, originalContent: data.content, language, isUnsaved: false }]);
         setActiveFile(filePath);
-      } else {
-        if (data.isBinary) {
-          setError(`Cannot open binary file: ${filePath.split('/').pop()}`);
-        } else {
-          setError(data.error || 'Failed to load file');
-        }
-      }
-    } catch (err) {
-      setError('Network error loading file');
-      console.error('File load error:', err);
-    }
+      } else { setError(data.isBinary ? 'Cannot open binary file' : (data.error || 'Failed')); }
+    } catch { setError('Network error'); }
   };
-  
-  // Handle directory toggle
+
   const handleToggleDir = (dirPath: string) => {
-    setExpandedDirs(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(dirPath)) {
-        newSet.delete(dirPath);
-      } else {
-        newSet.add(dirPath);
-      }
-      return newSet;
-    });
+    setExpandedDirs(prev => { const n = new Set(prev); n.has(dirPath) ? n.delete(dirPath) : n.add(dirPath); return n; });
   };
-  
-  // Handle file content change
+
   const handleContentChange = (path: string, content: string) => {
-    setOpenFiles(prev => prev.map(file => 
-      file.path === path 
-        ? { 
-            ...file, 
-            content, 
-            isUnsaved: content !== file.originalContent 
-          }
-        : file
-    ));
+    setOpenFiles(prev => prev.map(f => f.path === path ? { ...f, content, isUnsaved: content !== f.originalContent } : f));
   };
-  
-  // Handle tab close
+
   const handleCloseFile = (path: string) => {
     const file = openFiles.find(f => f.path === path);
-    if (file?.isUnsaved) {
-      if (!confirm(`File ${file.path.split('/').pop()} has unsaved changes. Close anyway?`)) {
-        return;
-      }
-    }
-    
+    if (file?.isUnsaved && !confirm(`${file.path.split('/').pop()} has unsaved changes. Close?`)) return;
     setOpenFiles(prev => prev.filter(f => f.path !== path));
     if (activeFile === path) {
       const remaining = openFiles.filter(f => f.path !== path);
       setActiveFile(remaining.length > 0 ? remaining[0].path : '');
     }
   };
-  
-  // Handle file save
+
   const handleSave = async (path?: string) => {
-    const fileToSave = path ? openFiles.find(f => f.path === path) : openFiles.find(f => f.path === activeFile);
-    if (!fileToSave) return;
-    
+    const file = openFiles.find(f => f.path === (path || activeFile));
+    if (!file) return;
     setSaving(true);
     try {
-      const response = await fetch('/api/files/content', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          path: fileToSave.path,
-          content: fileToSave.content
-        })
-      });
-      
-      if (response.ok) {
-        setOpenFiles(prev => prev.map(file => 
-          file.path === fileToSave.path 
-            ? { 
-                ...file, 
-                originalContent: file.content,
-                isUnsaved: false 
-              }
-            : file
-        ));
-      } else {
-        const data = await response.json();
-        setError(data.error || 'Failed to save file');
-      }
-    } catch (err) {
-      setError('Network error saving file');
-      console.error('Save error:', err);
-    } finally {
-      setSaving(false);
-    }
+      const r = await fetch('/api/files/content', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: file.path, content: file.content }) });
+      if (r.ok) { setOpenFiles(prev => prev.map(f => f.path === file.path ? { ...f, originalContent: f.content, isUnsaved: false } : f)); }
+      else { const data = await r.json(); setError(data.error || 'Save failed'); }
+    } catch { setError('Network error saving'); }
+    finally { setSaving(false); }
   };
-  
-  // Keyboard shortcuts
+
+  const handleCreate = async () => {
+    if (!newName.trim()) return;
+    const fullPath = `${createDialog.parentPath}/${newName.trim()}`;
+    if (createDialog.type === 'file') {
+      try {
+        const r = await fetch('/api/files/content', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: fullPath, content: '' }) });
+        if (r.ok) { await loadTree(); setExpandedDirs(prev => new Set(prev).add(createDialog.parentPath)); handleFileSelect(fullPath); }
+        else { const data = await r.json(); setError(data.error || 'Create failed'); }
+      } catch { setError('Network error'); }
+    } else {
+      try {
+        const r = await fetch('/api/files/mkdir', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: fullPath }) });
+        if (r.ok) { await loadTree(); setExpandedDirs(prev => new Set(prev).add(createDialog.parentPath)); }
+        else { const data = await r.json(); setError(data.error || 'Create folder failed'); }
+      } catch { setError('Network error'); }
+    }
+    setCreateDialog({ open: false, type: 'file', parentPath: '' }); setNewName('');
+  };
+
+  const handleContextAction = (action: 'newFile' | 'newFolder', dirPath: string) => {
+    setCreateDialog({ open: true, type: action === 'newFile' ? 'file' : 'folder', parentPath: dirPath });
+    setNewName('');
+  };
+
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey) {
-        if (e.key === 's') {
-          e.preventDefault();
-          handleSave();
-        }
-      }
-    };
-    
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    const handler = (e: KeyboardEvent) => { if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); handleSave(); } };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
   }, [activeFile, openFiles]);
-  
-  // Sidebar resizing
+
   useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isResizing) return;
-      const newWidth = Math.max(200, Math.min(600, e.clientX));
-      setSidebarWidth(newWidth);
-    };
-    
-    const handleMouseUp = () => {
-      setIsResizing(false);
-    };
-    
-    if (isResizing) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-    }
-    
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
+    const move = (e: MouseEvent) => { if (isResizing) setSidebarWidth(Math.max(180, Math.min(500, e.clientX))); };
+    const up = () => setIsResizing(false);
+    if (isResizing) { document.addEventListener('mousemove', move); document.addEventListener('mouseup', up); }
+    return () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); };
   }, [isResizing]);
-  
-  const activeFileData = openFiles.find(f => f.path === activeFile);
-  const getBreadcrumb = (path: string) => {
-    if (!path) return '';
-    return path.replace(projectPath, '').replace(/^\//, '') || '/';
+
+  const handleEditorMount = (editor: any, monaco: Monaco) => {
+    editorRef.current = editor;
+    monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({ noSemanticValidation: false, noSyntaxValidation: false });
+    monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
+      target: monaco.languages.typescript.ScriptTarget.ESNext,
+      module: monaco.languages.typescript.ModuleKind.ESNext,
+      moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
+      allowNonTsExtensions: true, jsx: monaco.languages.typescript.JsxEmit.ReactJSX,
+      allowJs: true, checkJs: true, strict: true, esModuleInterop: true, skipLibCheck: true,
+    });
+    monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({ noSemanticValidation: false, noSyntaxValidation: false });
+    monaco.languages.typescript.javascriptDefaults.setCompilerOptions({
+      target: monaco.languages.typescript.ScriptTarget.ESNext, module: monaco.languages.typescript.ModuleKind.ESNext,
+      allowNonTsExtensions: true, jsx: monaco.languages.typescript.JsxEmit.ReactJSX, allowJs: true, checkJs: true,
+    });
+    editor.focus();
   };
-  
+
+  const activeFileData = openFiles.find(f => f.path === activeFile);
+  const getBreadcrumb = (p: string) => p ? p.replace(projectPath, '').replace(/^\//, '') || '/' : '';
+
   return (
-    <div className="flex h-screen bg-background">
-      {/* File tree sidebar */}
-      <div 
-        className="border-r bg-card flex flex-col"
-        style={{ width: sidebarWidth }}
-      >
-        {/* Sidebar header */}
-        <div className="p-4 border-b">
-          <h2 className="font-semibold text-sm">File Explorer</h2>
-          {projectPath && (
-            <p className="text-xs text-muted-foreground mt-1 truncate" title={projectPath}>
-              {projectPath}
-            </p>
-          )}
-        </div>
-        
-        {/* File tree */}
-        <ScrollArea className="flex-1">
-          <div className="p-2">
-            {loading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="w-5 h-5 animate-spin" />
-              </div>
-            ) : error ? (
-              <div className="flex items-center gap-2 text-destructive text-sm py-4">
-                <AlertCircle className="w-4 h-4" />
-                {error}
-              </div>
-            ) : tree.length === 0 ? (
-              <div className="text-muted-foreground text-sm py-4">
-                No files found
-              </div>
-            ) : (
-              tree.map(node => (
-                <FileTreeNode
-                  key={node.path}
-                  node={node}
-                  onFileSelect={handleFileSelect}
-                  expandedDirs={expandedDirs}
-                  onToggleDir={handleToggleDir}
-                />
-              ))
-            )}
-          </div>
-        </ScrollArea>
-      </div>
-      
-      {/* Resize handle */}
-      <div
-        ref={resizeRef}
-        className="w-1 bg-border hover:bg-border/80 cursor-col-resize"
-        onMouseDown={(e) => {
-          e.preventDefault();
-          setIsResizing(true);
-        }}
-      />
-      
-      {/* Editor area */}
-      <div className="flex-1 flex flex-col">
-        {/* Tabs */}
-        {openFiles.length > 0 && (
-          <div className="border-b bg-muted/30">
-            <Tabs value={activeFile} onValueChange={setActiveFile} className="w-full">
-              <TabsList className="w-full justify-start bg-transparent h-auto p-0 rounded-none">
-                {openFiles.map(file => (
-                  <TabsTrigger
-                    key={file.path}
-                    value={file.path}
-                    className="relative rounded-none border-r data-[state=active]:bg-background data-[state=active]:shadow-none px-3 py-2 gap-2"
-                  >
-                    {getFileIcon(file.path.split('/').pop() || '')}
-                    <span className="text-sm truncate max-w-32">
-                      {file.path.split('/').pop()}
-                    </span>
-                    {file.isUnsaved && (
-                      <Dot className="w-3 h-3 text-orange-500 -mr-1" />
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-5 w-5 p-0 ml-1 hover:bg-muted"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleCloseFile(file.path);
-                      }}
-                    >
-                      <X className="w-3 h-3" />
-                    </Button>
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
-          </div>
-        )}
-        
-        {/* Editor header */}
-        {activeFileData && (
-          <div className="flex items-center justify-between px-4 py-2 border-b bg-muted/50">
-            <div className="flex items-center gap-2">
-              {getFileIcon(activeFileData.path.split('/').pop() || '')}
-              <span className="text-sm font-medium">
-                {getBreadcrumb(activeFileData.path)}
-              </span>
-              {activeFileData.isUnsaved && (
-                <Badge variant="outline" className="text-xs">
-                  Unsaved
-                </Badge>
-              )}
+    <>
+      <div className="flex flex-1 overflow-hidden bg-background">
+        {/* Sidebar */}
+        <div className="border-r bg-card flex flex-col overflow-hidden" style={{ width: sidebarWidth, minWidth: sidebarWidth }}>
+          <div className="p-3 border-b flex items-center justify-between shrink-0">
+            <div className="min-w-0">
+              <h2 className="font-semibold text-sm">File Explorer</h2>
+              {projectPath && <p className="text-xs text-muted-foreground mt-0.5 truncate" title={projectPath}>{projectPath}</p>}
             </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleSave(activeFileData.path)}
-                disabled={!activeFileData.isUnsaved || saving}
-              >
-                {saving ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <Save className="w-4 h-4 mr-2" />
-                )}
-                Save
+            <div className="flex items-center gap-1 shrink-0">
+              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="New File" onClick={() => { setCreateDialog({ open: true, type: 'file', parentPath: projectPath }); setNewName(''); }}>
+                <FilePlus className="w-4 h-4" />
+              </Button>
+              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="New Folder" onClick={() => { setCreateDialog({ open: true, type: 'folder', parentPath: projectPath }); setNewName(''); }}>
+                <FolderPlus className="w-4 h-4" />
+              </Button>
+              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="Refresh" onClick={loadTree}>
+                <RefreshCw className="w-4 h-4" />
               </Button>
             </div>
           </div>
-        )}
-        
+          <div className="flex-1 overflow-y-auto">
+            <div className="p-2">
+              {loading ? (
+                <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin" /></div>
+              ) : error && tree.length === 0 ? (
+                <div className="flex items-center gap-2 text-destructive text-sm py-4"><AlertCircle className="w-4 h-4" />{error}</div>
+              ) : (
+                tree.map(node => (
+                  <FileTreeNode key={node.path} node={node} onFileSelect={handleFileSelect} onContextAction={handleContextAction} expandedDirs={expandedDirs} onToggleDir={handleToggleDir} selectedFile={activeFile} />
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Resize */}
+        <div className="w-1 bg-border hover:bg-primary/30 cursor-col-resize shrink-0" onMouseDown={e => { e.preventDefault(); setIsResizing(true); }} />
+
         {/* Editor */}
-        <div className="flex-1 relative">
-          {activeFileData ? (
-            <Editor
-              height="100%"
-              language={activeFileData.language}
-              value={activeFileData.content}
-              theme="vs-dark"
-              options={{
-                minimap: { enabled: true },
-                fontSize: 14,
-                lineNumbers: 'on',
-                wordWrap: 'on',
-                automaticLayout: true,
-                scrollBeyondLastLine: false,
-                tabSize: 2,
-                insertSpaces: true,
-              }}
-              onChange={(value) => handleContentChange(activeFileData.path, value || '')}
-              onMount={(editor) => {
-                editorRef.current = editor;
-                // Focus editor
-                editor.focus();
-              }}
-            />
-          ) : openFiles.length === 0 ? (
-            <div className="flex items-center justify-center h-full text-muted-foreground">
-              <div className="text-center">
-                <Code className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                <p className="text-lg font-medium mb-2">Monaco Code Editor</p>
-                <p className="text-sm">Select a file from the sidebar to start editing</p>
-                {projectPath && (
-                  <p className="text-xs mt-2 opacity-75">Project: {projectPath}</p>
-                )}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {openFiles.length > 0 && (
+            <div className="border-b bg-muted/30 shrink-0 overflow-x-auto">
+              <div className="flex">
+                {openFiles.map(file => (
+                  <div key={file.path} className={cn("flex items-center gap-1.5 px-3 py-2 border-r cursor-pointer text-sm shrink-0", activeFile === file.path ? "bg-background" : "bg-muted/30 hover:bg-muted/50")} onClick={() => setActiveFile(file.path)}>
+                    {getFileIcon(file.path.split('/').pop() || '')}
+                    <span className="truncate max-w-32">{file.path.split('/').pop()}</span>
+                    {file.isUnsaved && <Dot className="w-3 h-3 text-orange-500 -mr-1" />}
+                    <button className="ml-1 p-0.5 hover:bg-muted rounded" onClick={e => { e.stopPropagation(); handleCloseFile(file.path); }}><X className="w-3 h-3" /></button>
+                  </div>
+                ))}
               </div>
             </div>
-          ) : null}
+          )}
+
+          {activeFileData && (
+            <div className="flex items-center justify-between px-4 py-1.5 border-b bg-muted/50 shrink-0">
+              <div className="flex items-center gap-2">
+                {getFileIcon(activeFileData.path.split('/').pop() || '')}
+                <span className="text-sm font-medium">{getBreadcrumb(activeFileData.path)}</span>
+                {activeFileData.isUnsaved && <Badge variant="outline" className="text-xs">Unsaved</Badge>}
+              </div>
+              <Button variant="outline" size="sm" onClick={() => handleSave(activeFileData.path)} disabled={!activeFileData.isUnsaved || saving}>
+                {saving ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}Save
+              </Button>
+            </div>
+          )}
+
+          <div className="flex-1 overflow-hidden">
+            {activeFileData ? (
+              <Editor
+                height="100%"
+                language={activeFileData.language}
+                value={activeFileData.content}
+                theme="vs-dark"
+                options={{
+                  minimap: { enabled: true }, fontSize: 14, lineNumbers: 'on', wordWrap: 'on',
+                  automaticLayout: true, scrollBeyondLastLine: false, tabSize: 2, insertSpaces: true,
+                  suggestOnTriggerCharacters: true, quickSuggestions: true,
+                  parameterHints: { enabled: true }, formatOnPaste: true,
+                  bracketPairColorization: { enabled: true },
+                }}
+                onChange={v => handleContentChange(activeFileData.path, v || '')}
+                onMount={handleEditorMount}
+              />
+            ) : (
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                <div className="text-center">
+                  <Code className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p className="text-lg font-medium mb-2">Monaco Code Editor</p>
+                  <p className="text-sm">Select a file from the sidebar to start editing</p>
+                  {projectPath && <p className="text-xs mt-2 opacity-75">Project: {projectPath}</p>}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+
+      <Dialog open={createDialog.open} onOpenChange={open => { if (!open) setCreateDialog(c => ({ ...c, open: false })); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader><DialogTitle>{createDialog.type === 'file' ? 'New File' : 'New Folder'}</DialogTitle></DialogHeader>
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground truncate">In: {createDialog.parentPath.replace(projectPath, '.') || '.'}</p>
+            <Input placeholder={createDialog.type === 'file' ? 'filename.ts' : 'folder-name'} value={newName} onChange={e => setNewName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleCreate(); }} autoFocus />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateDialog(c => ({ ...c, open: false }))}>Cancel</Button>
+            <Button onClick={handleCreate} disabled={!newName.trim()}>Create</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
 export default function EditorPage() {
   return (
-    <Suspense fallback={
-      <div className="flex items-center justify-center h-screen">
-        <div className="flex items-center gap-2">
-          <Loader2 className="w-6 h-6 animate-spin" />
-          <span>Loading editor...</span>
-        </div>
-      </div>
-    }>
+    <Suspense fallback={<div className="flex items-center justify-center h-screen"><Loader2 className="w-6 h-6 animate-spin mr-2" />Loading editor...</div>}>
       <EditorPageContent />
     </Suspense>
   );

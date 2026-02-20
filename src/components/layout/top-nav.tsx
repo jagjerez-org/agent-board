@@ -1,7 +1,8 @@
 'use client';
 
+import { Suspense } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Activity, Users, FolderOpen, GitBranch, Wrench, LayoutDashboard } from 'lucide-react';
 
@@ -14,11 +15,16 @@ const navItems = [
   { href: '/worktrees', label: 'Worktrees', icon: GitBranch },
 ];
 
-export function TopNav() {
+function TopNavInner() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  if (searchParams.get('embedded') === 'true') {
+    return null;
+  }
 
   return (
-    <header className="border-b border-border bg-card">
+    <header className="border-b border-border bg-card shrink-0">
       <div className="flex items-center px-6 py-3">
         <div className="flex items-center space-x-4">
           <h1 className="text-2xl font-bold">📋 Agent Board</h1>
@@ -41,5 +47,13 @@ export function TopNav() {
         </div>
       </div>
     </header>
+  );
+}
+
+export function TopNav() {
+  return (
+    <Suspense>
+      <TopNavInner />
+    </Suspense>
   );
 }

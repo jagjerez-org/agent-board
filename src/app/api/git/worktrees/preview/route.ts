@@ -192,10 +192,21 @@ export async function POST(request: NextRequest) {
       `${homeDir}/.local/bin`,
       '/usr/local/bin',
     ].join(':');
-    const env = { ...process.env, PORT: port.toString(), HOST: '0.0.0.0', NODE_ENV: 'development', PATH: `${extraPaths}:${process.env.PATH}` };
+    const env = { ...process.env, PORT: port.toString(), HOST: '0.0.0.0', HOSTNAME: '0.0.0.0', NODE_ENV: 'development', PATH: `${extraPaths}:${process.env.PATH}` };
+
+    // Patch command to bind to 0.0.0.0 for LAN access
+    let finalCommand = command;
+    if (!finalCommand.includes('--hostname') && !finalCommand.includes('-H ')) {
+      if (/\b(next\s+dev|turbo\s+(run\s+)?dev)\b/.test(finalCommand)) {
+        finalCommand = finalCommand.replace(/\b(next\s+dev|turbo\s+(?:run\s+)?dev)\b/, '$& --hostname 0.0.0.0');
+      }
+    }
+    if (finalCommand.includes('flutter') && !finalCommand.includes('--web-hostname')) {
+      finalCommand += ' --web-hostname=0.0.0.0';
+    }
 
     // Spawn the dev server process
-    const childProcess = spawn('bash', ['-c', command], {
+    const childProcess = spawn('bash', ['-c', finalCommand], {
       cwd: worktree.path,
       detached: true,
       stdio: ['ignore', 'pipe', 'pipe'],
