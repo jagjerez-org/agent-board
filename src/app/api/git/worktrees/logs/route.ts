@@ -346,8 +346,8 @@ export async function POST(request: NextRequest) {
     commands.push(logCommand);
     await saveCommands(commands);
     
-    // Add to log service
-    const key = logService['getProcessKey'](project, branch, commandId);
+    // Add to log service — use branch-level key (no commandId) so the SSE subscription picks it up
+    const key = logService['getProcessKey'](project, branch);
     logService.addProcess(key, childProcess, logCommand);
     
     return NextResponse.json({
