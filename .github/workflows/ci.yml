@@ -33,6 +33,22 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Package release zip
+        run: |
+          VERSION=$(node -p 'require("./package.json").version')
+          ZIP_NAME="agent-board-v${VERSION}.zip"
+          zip -r "$ZIP_NAME" . \
+            -x "node_modules/*" ".next/*" ".git/*" "coverage/*" ".env*" "data/*" "*.tsbuildinfo"
+          echo "ZIP_NAME=$ZIP_NAME" >> "$GITHUB_ENV"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-board-v${{ env.VERSION }}
+          path: ${{ env.ZIP_NAME }}
+          retention-days: 30
+
   publish-clawhub:
     needs: ci
     # Disabled: ClawHub requires GitHub account > 7 days old. Re-enable after ~2026-02-24.
