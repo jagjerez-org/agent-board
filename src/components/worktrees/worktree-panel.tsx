@@ -113,6 +113,7 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
   const [createNewBranch, setCreateNewBranch] = useState(false);
   const [selectedBranch, setSelectedBranch] = useState('');
   const [baseBranch, setBaseBranch] = useState('main');
+  const [branchSearch, setBranchSearch] = useState('');
 
   // Resolve project ID to repo-style path
   const getRepoProjectId = useCallback((pid: string) => {
@@ -508,7 +509,7 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
                               <div>
                                 <div className="flex items-center gap-2">
                                   <span className="font-medium">{wt.branch}</span>
-                                  {wt.isMain && <Badge variant="default">Main</Badge>}
+                                  {wt.isMain && <Badge variant="outline" className="text-[10px] px-1 py-0">primary</Badge>}
                                   {branchInfo?.isLocal && branchInfo?.isRemote && <Badge variant="default" className="text-[10px] px-1 py-0">local + remote</Badge>}
                                   {branchInfo?.isLocal && !branchInfo?.isRemote && <Badge variant="secondary" className="text-[10px] px-1 py-0">local only</Badge>}
                                   {branchInfo && !branchInfo.isLocal && branchInfo.isRemote && <Badge variant="outline" className="text-[10px] px-1 py-0">remote only</Badge>}
@@ -713,15 +714,26 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
           {/* Branch overview */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Branch Overview</CardTitle>
-              <CardDescription>Status of all branches in this repository</CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg">Branch Overview</CardTitle>
+                  <CardDescription>Status of all branches in this repository</CardDescription>
+                </div>
+                <Badge variant="secondary">{branches.length} branches</Badge>
+              </div>
+              <Input
+                placeholder="Search branches..."
+                value={branchSearch}
+                onChange={(e) => setBranchSearch(e.target.value)}
+                className="mt-2"
+              />
             </CardHeader>
             <CardContent>
               {branches.length === 0 ? (
                 <div className="text-center py-4 text-muted-foreground">No branches found</div>
               ) : (
                 <div className="space-y-2">
-                  {branches.map((b) => (
+                  {branches.filter(b => !branchSearch || b.name.toLowerCase().includes(branchSearch.toLowerCase())).map((b) => (
                     <div key={b.name} className="flex items-center justify-between py-2 px-3 rounded border hover:bg-muted/50 transition-colors">
                       <div className="flex items-center gap-2">
                         <GitBranch className="w-4 h-4 text-muted-foreground" />
