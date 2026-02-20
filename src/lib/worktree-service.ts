@@ -17,6 +17,7 @@ export interface Worktree {
 export interface Branch {
   name: string;
   isRemote: boolean;
+  isLocal: boolean;
   isCurrent: boolean;
   hasWorktree: boolean;
 }
@@ -133,26 +134,35 @@ export async function listBranches(repoPath: string): Promise<Branch[]> {
     const worktrees = await listWorktrees(repoPath);
     const worktreeBranches = new Set(worktrees.map(w => w.branch));
     
-    const branches: Branch[] = [];
+    // Collect raw entries first
+    const localSet = new Set<string>();
+    const remoteSet = new Set<string>();
+    const currentBranch: string[] = [];
     
     for (const line of stdout.trim().split('\n').filter(Boolean)) {
       const [name, currentFlag] = line.split('|');
       if (!name) continue;
-      
-      // Skip HEAD pointer
       if (name.includes(' -> ')) continue;
       
       const isRemote = name.startsWith('origin/');
       const cleanName = isRemote ? name.substring('origin/'.length) : name;
       
-      // Skip if we already have this branch (avoid duplicates between local and remote)
-      if (branches.some(b => b.name === cleanName)) continue;
-      
+      if (isRemote) remoteSet.add(cleanName);
+      else localSet.add(cleanName);
+      if (currentFlag === 'current') currentBranch.push(cleanName);
+    }
+    
+    // Build unified list: one entry per branch name with local/remote flags
+    const allNames = new Set([...localSet, ...remoteSet]);
+    const branches: Branch[] = [];
+    
+    for (const name of allNames) {
       branches.push({
-        name: cleanName,
-        isRemote,
-        isCurrent: currentFlag === 'current',
-        hasWorktree: worktreeBranches.has(cleanName)
+        name,
+        isLocal: localSet.has(name),
+        isRemote: remoteSet.has(name),
+        isCurrent: currentBranch.includes(name),
+        hasWorktree: worktreeBranches.has(name),
       });
     }
     

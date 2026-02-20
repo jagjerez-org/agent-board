@@ -9,7 +9,7 @@ import fs from 'fs/promises';
 const execAsync = promisify(exec);
 
 // Fetch branches remotely via CLI APIs when repo not cloned locally
-async function fetchRemoteBranches(projectId: string): Promise<{ name: string; isRemote: boolean; isCurrent: boolean; hasWorktree: boolean }[]> {
+async function fetchRemoteBranches(projectId: string): Promise<{ name: string; isRemote: boolean; isLocal: boolean; isCurrent: boolean; hasWorktree: boolean }[]> {
   const providers = await getProviders();
   
   // Try to find project info from saved projects
@@ -52,7 +52,7 @@ async function fetchRemoteBranches(projectId: string): Promise<{ name: string; i
         );
         const names = stdout.trim().split('\n').filter(Boolean);
         if (names.length > 0) {
-          return names.map(name => ({ name, isRemote: true, isCurrent: false, hasWorktree: false }));
+          return names.map(name => ({ name, isRemote: true, isLocal: false, isCurrent: false, hasWorktree: false }));
         }
       } catch { /* not a github repo */ }
     }
@@ -84,6 +84,7 @@ async function fetchRemoteBranches(projectId: string): Promise<{ name: string; i
           return branchData.map((b: { name: string; default: boolean }) => ({
             name: b.name,
             isRemote: true,
+            isLocal: false,
             isCurrent: b.default || false,
             hasWorktree: false,
           }));
@@ -96,6 +97,47 @@ async function fetchRemoteBranches(projectId: string): Promise<{ name: string; i
 }
 
 import { resolveProjectId } from '@/lib/project-resolver';
+
+// POST /api/git/branches — create a branch in the repo
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { project: rawProject, branch: branchName, baseBranch } = body;
+
+    if (!rawProject || !branchName) {
+      return NextResponse.json(
+        { error: 'project and branch are required' },
+        { status: 400 }
+      );
+    }
+
+    const project = await resolveProjectId(rawProject);
+    const repoPath = await getRepoPath(project);
+
+    if (!repoPath) {
+      return NextResponse.json(
+        { error: `Repository not found locally for project: ${project}. Clone it first or use Worktrees page.` },
+        { status: 404 }
+      );
+    }
+
+    const base = baseBranch || 'HEAD';
+    await execAsync(`git branch "${branchName}" "${base}"`, { cwd: repoPath });
+    // Push to remote
+    await execAsync(`git push origin "${branchName}"`, { cwd: repoPath });
+
+    return NextResponse.json({
+      success: true,
+      branch: branchName,
+      baseBranch: base,
+      message: `Branch '${branchName}' created and pushed to origin`,
+    });
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error('Error in POST /api/git/branches:', msg);
+    return NextResponse.json({ error: msg }, { status: 400 });
+  }
+}
 
 // GET /api/git/branches?project=<projectId>
 export async function GET(request: NextRequest) {

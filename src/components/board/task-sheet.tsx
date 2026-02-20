@@ -80,16 +80,18 @@ export function TaskSheet({ taskId, mode, open, onOpenChange, onSaved, defaultSt
   const [labels, setLabels] = useState<string[]>([]);
   const [projectId, setProjectId] = useState<string>('');
   const [projects, setProjects] = useState<Project[]>([]);
-  const [branches, setBranches] = useState<string[]>([]);
+  interface BranchInfo { name: string; isLocal: boolean; isRemote: boolean; isCurrent: boolean; hasWorktree: boolean }
+  const [branches, setBranches] = useState<BranchInfo[]>([]);
   const [branchOpen, setBranchOpen] = useState(false);
   const [branchSearch, setBranchSearch] = useState('');
+  const [creatingBranch, setCreatingBranch] = useState(false);
 
-  // Include saved branch in list even if not on remote
-  const allBranches = branch && !branches.includes(branch) 
-    ? [branch, ...branches] 
+  // Include saved branch in list even if not on remote/local
+  const allBranches: BranchInfo[] = branch && !branches.some(b => b.name === branch)
+    ? [{ name: branch, isLocal: false, isRemote: false, isCurrent: false, hasWorktree: false }, ...branches]
     : branches;
   const filteredBranches = branchSearch
-    ? allBranches.filter(b => b.toLowerCase().includes(branchSearch.toLowerCase()))
+    ? allBranches.filter(b => b.name.toLowerCase().includes(branchSearch.toLowerCase()))
     : allBranches;
   const [worktreeStatus, setWorktreeStatus] = useState<{ hasWorktree: boolean; path?: string } | null>(null);
   const [agents, setAgents] = useState<{ id: string; name: string; status?: string }[]>([]);
@@ -123,7 +125,13 @@ export function TaskSheet({ taskId, mode, open, onOpenChange, onSaved, defaultSt
         .then(r => r.json())
         .then(data => {
           if (data.branches) {
-            setBranches(data.branches.map((b: any) => b.name));
+            setBranches(data.branches.map((b: any) => ({
+              name: b.name,
+              isLocal: b.isLocal ?? false,
+              isRemote: b.isRemote ?? true,
+              isCurrent: b.isCurrent ?? false,
+              hasWorktree: b.hasWorktree ?? false,
+            })));
           }
         })
         .catch(() => setBranches([]));
@@ -191,6 +199,45 @@ export function TaskSheet({ taskId, mode, open, onOpenChange, onSaved, defaultSt
       setProjectId(defaultProjectId || '');
     }
   }, [mode, taskId, open, defaultStatus]);
+
+  const handleCreateBranch = async (branchName: string) => {
+    setBranchOpen(false);
+    setBranchSearch('');
+    setCreatingBranch(true);
+    try {
+      const proj = projects.find(p => p.id === projectId);
+      const branchProjectId = proj?.repo_owner && proj?.repo_name
+        ? `${proj.repo_owner}/${proj.repo_name}`
+        : projectId;
+      const res = await fetch('/api/git/branches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project: branchProjectId, branch: branchName }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || 'Failed to create branch');
+        // Still set as saved-only branch
+        setBranch(branchName);
+        return;
+      }
+      // Refresh branch list and select the new branch
+      setBranch(branchName);
+      const listRes = await fetch(`/api/git/branches?project=${encodeURIComponent(branchProjectId)}`);
+      const listData = await listRes.json();
+      if (listData.branches) {
+        setBranches(listData.branches.map((b: any) => ({
+          name: b.name, isLocal: b.isLocal ?? false, isRemote: b.isRemote ?? true,
+          isCurrent: b.isCurrent ?? false, hasWorktree: b.hasWorktree ?? false,
+        })));
+      }
+    } catch {
+      alert('Failed to create branch');
+      setBranch(branchName);
+    } finally {
+      setCreatingBranch(false);
+    }
+  };
 
   const addLabel = () => {
     const l = labelInput.trim();
@@ -346,11 +393,22 @@ export function TaskSheet({ taskId, mode, open, onOpenChange, onSaved, defaultSt
                       role="combobox"
                       aria-expanded={branchOpen}
                       className="flex-1 justify-between"
-                      disabled={!projectId}
+                      disabled={!projectId || creatingBranch}
                     >
                       <div className="flex items-center gap-2">
                         <GitBranch className="w-4 h-4" />
-                        {branch || "Select branch..."}
+                        {branch ? (
+                          <span className="flex items-center gap-1.5">
+                            {branch}
+                            {(() => {
+                              const bi = allBranches.find(b => b.name === branch);
+                              if (!bi || (!bi.isLocal && !bi.isRemote)) return <Badge variant="outline" className="text-[10px] px-1 py-0">saved</Badge>;
+                              if (bi.isLocal && bi.isRemote) return <Badge variant="default" className="text-[10px] px-1 py-0">local + remote</Badge>;
+                              if (bi.isLocal) return <Badge variant="secondary" className="text-[10px] px-1 py-0">local</Badge>;
+                              return <Badge variant="outline" className="text-[10px] px-1 py-0">remote</Badge>;
+                            })()}
+                          </span>
+                        ) : "Select branch..."}
                       </div>
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
@@ -367,41 +425,33 @@ export function TaskSheet({ taskId, mode, open, onOpenChange, onSaved, defaultSt
                           {branchSearch.trim() ? (
                             <CommandItem
                               value={branchSearch.trim()}
-                              onSelect={() => {
-                                setBranch(branchSearch.trim());
-                                setBranchOpen(false);
-                                setBranchSearch('');
-                              }}
+                              onSelect={() => handleCreateBranch(branchSearch.trim())}
                               className="cursor-pointer"
                             >
                               <Plus className="mr-2 h-4 w-4" />
-                              Create branch &quot;{branchSearch.trim()}&quot;
+                              Create &amp; push &quot;{branchSearch.trim()}&quot;
                             </CommandItem>
                           ) : (
                             'No branches found.'
                           )}
                         </CommandEmpty>
                         <CommandGroup>
-                          {branchSearch.trim() && !filteredBranches.includes(branchSearch.trim()) && (
+                          {branchSearch.trim() && !filteredBranches.some(b => b.name === branchSearch.trim()) && (
                             <CommandItem
                               value={`__create__${branchSearch.trim()}`}
-                              onSelect={() => {
-                                setBranch(branchSearch.trim());
-                                setBranchOpen(false);
-                                setBranchSearch('');
-                              }}
+                              onSelect={() => handleCreateBranch(branchSearch.trim())}
                               className="text-primary"
                             >
                               <Plus className="mr-2 h-4 w-4" />
-                              Create &quot;{branchSearch.trim()}&quot;
+                              Create &amp; push &quot;{branchSearch.trim()}&quot;
                             </CommandItem>
                           )}
-                          {filteredBranches.map((branchName) => (
+                          {filteredBranches.map((bi) => (
                             <CommandItem
-                              key={branchName}
-                              value={branchName}
+                              key={bi.name}
+                              value={bi.name}
                               onSelect={() => {
-                                setBranch(branchName === branch ? "" : branchName);
+                                setBranch(bi.name === branch ? "" : bi.name);
                                 setBranchOpen(false);
                                 setBranchSearch('');
                               }}
@@ -409,10 +459,16 @@ export function TaskSheet({ taskId, mode, open, onOpenChange, onSaved, defaultSt
                               <Check
                                 className={cn(
                                   "mr-2 h-4 w-4",
-                                  branch === branchName ? "opacity-100" : "opacity-0"
+                                  branch === bi.name ? "opacity-100" : "opacity-0"
                                 )}
                               />
-                              {branchName}
+                              <span className="flex items-center gap-1.5 flex-1">
+                                {bi.name}
+                                {bi.isLocal && bi.isRemote && <Badge variant="default" className="text-[10px] px-1 py-0 ml-auto">local + remote</Badge>}
+                                {bi.isLocal && !bi.isRemote && <Badge variant="secondary" className="text-[10px] px-1 py-0 ml-auto">local</Badge>}
+                                {!bi.isLocal && bi.isRemote && <Badge variant="outline" className="text-[10px] px-1 py-0 ml-auto">remote</Badge>}
+                                {!bi.isLocal && !bi.isRemote && <Badge variant="outline" className="text-[10px] px-1 py-0 ml-auto opacity-50">saved</Badge>}
+                              </span>
                             </CommandItem>
                           ))}
                         </CommandGroup>
@@ -426,6 +482,9 @@ export function TaskSheet({ taskId, mode, open, onOpenChange, onSaved, defaultSt
                   </Badge>
                 )}
               </div>
+              {creatingBranch && (
+                <p className="text-xs text-muted-foreground mt-1">Creating branch and pushing to remote...</p>
+              )}
               {!projectId && (
                 <p className="text-xs text-muted-foreground mt-1">Select a project first to see branches</p>
               )}

@@ -3,64 +3,14 @@
 import Link from 'next/link';
 import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { FolderOpen, Users, Activity, GitBranch, Monitor, Terminal } from 'lucide-react';
+import { FolderOpen, Users, Activity, GitBranch } from 'lucide-react';
 import { WorktreePanel } from '@/components/worktrees/worktree-panel';
-import { PreviewPanel } from '@/components/worktrees/preview-panel';
-import { LogViewer } from '@/components/worktrees/log-viewer';
 import { Project } from '@/lib/types';
 import { Worktree } from '@/lib/worktree-service';
 
 export default function WorktreesPage() {
-  const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProject, setSelectedProject] = useState<string>('');
   const [worktrees, setWorktrees] = useState<Worktree[]>([]);
-  const [activeTab, setActiveTab] = useState('worktrees');
-
-  // Load projects
-  useEffect(() => {
-    fetch('/api/projects')
-      .then(r => r.json())
-      .then(data => setProjects(data.projects || []))
-      .catch(() => {});
-  }, []);
-
-  const loadWorktrees = useCallback(async () => {
-    if (!selectedProject) return;
-    
-    try {
-      const response = await fetch(`/api/git/worktrees?project=${encodeURIComponent(selectedProject)}`);
-      if (response.ok) {
-        const data = await response.json();
-        setWorktrees(data.worktrees || []);
-      } else {
-        setWorktrees([]);
-      }
-    } catch (error) {
-      console.error('Error loading worktrees:', error);
-      setWorktrees([]);
-    }
-  }, [selectedProject]);
-
-  // Load worktrees when project changes
-  useEffect(() => {
-    if (!selectedProject) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const response = await fetch(`/api/git/worktrees?project=${encodeURIComponent(selectedProject)}`);
-        if (response.ok && !cancelled) {
-          const data = await response.json();
-          setWorktrees(data.worktrees || []);
-        } else if (!cancelled) {
-          setWorktrees([]);
-        }
-      } catch {
-        if (!cancelled) setWorktrees([]);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [selectedProject]);
 
   return (
     <div className="flex flex-col h-screen">
@@ -108,59 +58,14 @@ export default function WorktreesPage() {
           <div className="mb-6">
             <h2 className="text-3xl font-bold mb-2">Git Worktrees</h2>
             <p className="text-muted-foreground">
-              Manage multiple branch checkouts for parallel development. Each worktree allows you to work on different branches simultaneously without switching.
+              Manage multiple branch checkouts for parallel development. Each worktree has its own preview server and logs.
             </p>
           </div>
           
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="worktrees" className="flex items-center gap-2">
-                <GitBranch className="w-4 h-4" />
-                Worktrees
-              </TabsTrigger>
-              <TabsTrigger value="previews" className="flex items-center gap-2">
-                <Monitor className="w-4 h-4" />
-                Previews
-              </TabsTrigger>
-              <TabsTrigger value="logs" className="flex items-center gap-2">
-                <Terminal className="w-4 h-4" />
-                Logs
-              </TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="worktrees" className="space-y-6">
-              <WorktreePanel 
-                onProjectChange={setSelectedProject}
-                onWorktreesChange={setWorktrees}
-              />
-            </TabsContent>
-            
-            <TabsContent value="previews" className="space-y-6">
-              {selectedProject ? (
-                <PreviewPanel 
-                  projectId={selectedProject}
-                  worktrees={worktrees}
-                />
-              ) : (
-                <div className="text-center py-8 text-muted-foreground">
-                  Please select a project from the Worktrees tab first
-                </div>
-              )}
-            </TabsContent>
-            
-            <TabsContent value="logs" className="space-y-6">
-              {selectedProject ? (
-                <LogViewer 
-                  projectId={selectedProject}
-                  worktrees={worktrees}
-                />
-              ) : (
-                <div className="text-center py-8 text-muted-foreground">
-                  Please select a project from the Worktrees tab first
-                </div>
-              )}
-            </TabsContent>
-          </Tabs>
+          <WorktreePanel 
+            onProjectChange={setSelectedProject}
+            onWorktreesChange={setWorktrees}
+          />
         </div>
       </main>
     </div>
