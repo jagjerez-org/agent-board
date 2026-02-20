@@ -40,12 +40,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Trash2, GitBranch, Check, ChevronsUpDown, Plus } from 'lucide-react';
+import { Trash2, GitBranch, Check, ChevronsUpDown, Plus, Eye, Pencil } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
-function RefinementMarkdown({ content }: { content: string }) {
+function MarkdownRenderer({ content }: { content: string }) {
   return (
     <div className="notion-md">
       <ReactMarkdown
@@ -172,6 +172,7 @@ export function TaskSheet({ taskId, mode, open, onOpenChange, onSaved, defaultSt
   const [prUrl, setPrUrl] = useState('');
   const [branch, setBranch] = useState('');
   const [labelInput, setLabelInput] = useState('');
+  const [descriptionMode, setDescriptionMode] = useState<'write' | 'preview'>('write');
   const [labels, setLabels] = useState<string[]>([]);
   const [projectId, setProjectId] = useState<string>('');
   const [projects, setProjects] = useState<Project[]>([]);
@@ -511,8 +512,43 @@ export function TaskSheet({ taskId, mode, open, onOpenChange, onSaved, defaultSt
             </div>
 
             <div>
-              <label className="text-sm font-medium mb-1 block">Description</label>
-              <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe the task..." rows={4} />
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-sm font-medium">Description</label>
+                <div className="flex items-center border rounded-md overflow-hidden text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setDescriptionMode('write')}
+                    className={`px-2.5 py-1 flex items-center gap-1 transition-colors ${descriptionMode === 'write' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-muted'}`}
+                  >
+                    <Pencil className="w-3 h-3" /> Write
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDescriptionMode('preview')}
+                    className={`px-2.5 py-1 flex items-center gap-1 transition-colors ${descriptionMode === 'preview' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-muted'}`}
+                  >
+                    <Eye className="w-3 h-3" /> Preview
+                  </button>
+                </div>
+              </div>
+              {descriptionMode === 'write' ? (
+                <Textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Describe the task... (supports **markdown**)"
+                  rows={6}
+                  className="font-mono text-sm"
+                />
+              ) : (
+                <div className="border rounded-md p-3 min-h-[150px] bg-muted/20">
+                  {description.trim() ? (
+                    <MarkdownRenderer content={description} />
+                  ) : (
+                    <p className="text-sm text-muted-foreground italic">Nothing to preview</p>
+                  )}
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground mt-1">Supports markdown: **bold**, *italic*, - lists, ## headings, `code`, [links](url)</p>
             </div>
 
             {/* Refinement Chat Section */}
@@ -584,7 +620,7 @@ export function TaskSheet({ taskId, mode, open, onOpenChange, onSaved, defaultSt
                 {/* Refinement document */}
                 {refinement && !refinement.includes('⏳') && (
                   <div className="px-4 py-3 border-b bg-background/50 max-w-none">
-                    <RefinementMarkdown content={refinement} />
+                    <MarkdownRenderer content={refinement} />
                   </div>
                 )}
 
