@@ -60,6 +60,13 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
   const [selectedProject, setSelectedProject] = useState<string>(projectId || '');
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
+
+  // Resolve project ID to repo-style path (owner/name) for git APIs
+  const getRepoProjectId = (pid: string) => {
+    const proj = projects.find(p => p.id === pid);
+    if (proj?.repo_owner && proj?.repo_name) return `${proj.repo_owner}/${proj.repo_name}`;
+    return pid;
+  };
   const [deleting, setDeleting] = useState<string | null>(null);
   
   // Create worktree dialog state
@@ -94,7 +101,7 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
     setLoading(true);
     try {
       // Load worktrees
-      const worktreesRes = await fetch(`/api/git/worktrees?project=${encodeURIComponent(selectedProject)}`);
+      const worktreesRes = await fetch(`/api/git/worktrees?project=${encodeURIComponent(getRepoProjectId(selectedProject))}`);
       if (worktreesRes.ok) {
         const worktreesData = await worktreesRes.json();
         const loadedWorktrees = worktreesData.worktrees || [];
@@ -106,7 +113,7 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
       }
 
       // Load branches
-      const branchesRes = await fetch(`/api/git/branches?project=${encodeURIComponent(selectedProject)}`);
+      const branchesRes = await fetch(`/api/git/branches?project=${encodeURIComponent(getRepoProjectId(selectedProject))}`);
       if (branchesRes.ok) {
         const branchesData = await branchesRes.json();
         setBranches(branchesData.branches || []);
@@ -134,7 +141,7 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          project: selectedProject,
+          project: getRepoProjectId(selectedProject),
           branch: branch,
           createBranch: createNewBranch
         })
@@ -171,7 +178,7 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          project: selectedProject,
+          project: getRepoProjectId(selectedProject),
           branch: branch
         })
       });

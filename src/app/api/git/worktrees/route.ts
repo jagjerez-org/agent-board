@@ -5,12 +5,14 @@ import {
   removeWorktree, 
   getRepoPath 
 } from '@/lib/worktree-service';
+import { resolveProjectId } from '@/lib/project-resolver';
 
 // GET /api/git/worktrees?project=<projectId>
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
-    const project = searchParams.get('project');
+    const rawProject = searchParams.get('project');
+    const project = rawProject ? await resolveProjectId(rawProject) : null;
     
     if (!project) {
       return NextResponse.json(
@@ -43,15 +45,16 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { project, branch, createBranch = false } = body;
+    const { project: rawProject, branch, createBranch = false } = body;
     
-    if (!project || !branch) {
+    if (!rawProject || !branch) {
       return NextResponse.json(
         { error: 'Project and branch parameters are required' },
         { status: 400 }
       );
     }
     
+    const project = await resolveProjectId(rawProject);
     const repoPath = await getRepoPath(project);
     if (!repoPath) {
       return NextResponse.json(
@@ -87,19 +90,20 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const body = await request.json();
-    const { project, branch } = body;
+    const { project: rawProject2, branch } = body;
     
-    if (!project || !branch) {
+    if (!rawProject2 || !branch) {
       return NextResponse.json(
         { error: 'Project and branch parameters are required' },
         { status: 400 }
       );
     }
     
-    const repoPath = await getRepoPath(project);
+    const project2 = await resolveProjectId(rawProject2);
+    const repoPath = await getRepoPath(project2);
     if (!repoPath) {
       return NextResponse.json(
-        { error: `Repository not found for project: ${project}` },
+        { error: `Repository not found for project: ${project2}` },
         { status: 404 }
       );
     }

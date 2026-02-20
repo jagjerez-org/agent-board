@@ -95,18 +95,22 @@ async function fetchRemoteBranches(projectId: string): Promise<{ name: string; i
   return [];
 }
 
+import { resolveProjectId } from '@/lib/project-resolver';
+
 // GET /api/git/branches?project=<projectId>
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
-    const project = searchParams.get('project');
+    const rawProject = searchParams.get('project');
     
-    if (!project) {
+    if (!rawProject) {
       return NextResponse.json(
         { error: 'Project parameter is required' },
         { status: 400 }
       );
     }
+    
+    const project = await resolveProjectId(rawProject);
     
     // Try local repo first
     const repoPath = await getRepoPath(project);
