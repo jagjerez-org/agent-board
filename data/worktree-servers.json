@@ -1,0 +1,13 @@
+{
+  "educabrera1997/ALA APP": [
+    {
+      "branch": "feat/change_ala_appa",
+      "port": 3200,
+      "pid": 3999282,
+      "status": "stopped",
+      "startedAt": "2026-02-20T10:06:11.706Z",
+      "command": "pnpm dev",
+      "project": "educabrera1997/ALA APP"
+    }
+  ]
+}

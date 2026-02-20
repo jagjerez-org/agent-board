@@ -193,9 +193,9 @@ class LogService {
           // Add to subscribers
           processData.subscribers.add(controller);
         } else {
-          // No process found, send error
+          // No active process — send info message, keep stream open
           const encoder = new TextEncoder();
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'error', message: 'Process not found', timestamp: new Date().toISOString() })}\n\n`));
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'system', message: 'No active process. Run a command or start a preview server.', timestamp: new Date().toISOString() })}\n\n`));
         }
       },
       cancel() {
