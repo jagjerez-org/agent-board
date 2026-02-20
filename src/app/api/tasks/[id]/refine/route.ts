@@ -1,13 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getTask, updateTask } from '@/lib/task-store';
-import { readFile } from 'fs/promises';
+import { readFile, writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
+import { existsSync } from 'fs';
+import { v4 as uuidv4 } from 'uuid';
 
 interface Props {
   params: Promise<{ id: string }>;
 }
 
-// Get OpenClaw gateway config
+interface ChatMessage {
+  id: string;
+  role: 'user' | 'agent';
+  content: string;
+  images?: string[];
+  timestamp: string;
+  agent_id?: string;
+}
+
+const CHAT_DIR = join(process.cwd(), 'data', 'chats');
+
+async function getChatMessages(taskId: string): Promise<ChatMessage[]> {
+  const filePath = join(CHAT_DIR, `${taskId}.json`);
+  if (!existsSync(filePath)) return [];
+  try { return JSON.parse(await readFile(filePath, 'utf8')); } catch { return []; }
+}
+
+async function addChatMessage(taskId: string, msg: ChatMessage) {
+  if (!existsSync(CHAT_DIR)) await mkdir(CHAT_DIR, { recursive: true });
+  const messages = await getChatMessages(taskId);
+  messages.push(msg);
+  await writeFile(join(CHAT_DIR, `${taskId}.json`), JSON.stringify(messages, null, 2), 'utf8');
+}
+
 async function getGatewayConfig(): Promise<{ url: string; token: string } | null> {
   try {
     const configPath = join(process.env.HOME || '/root', '.openclaw/openclaw.json');
@@ -16,104 +41,74 @@ async function getGatewayConfig(): Promise<{ url: string; token: string } | null
     const token = config.gateway?.auth?.token;
     if (!token) return null;
     return { url: `http://localhost:${port}`, token };
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
-// POST /api/tasks/[id]/refine — trigger AI refinement
+// POST /api/tasks/[id]/refine — trigger refinement with chat context
 export async function POST(request: NextRequest, { params }: Props) {
   try {
     const { id } = await params;
-    const body = await request.json().catch(() => ({}));
-    const feedback = body.feedback || '';
-
     const result = await getTask(id);
-    if (!result) {
-      return NextResponse.json({ error: 'Task not found' }, { status: 404 });
-    }
-
+    if (!result) return NextResponse.json({ error: 'Task not found' }, { status: 404 });
     const { task } = result;
-    const gateway = await getGatewayConfig();
-    if (!gateway) {
-      return NextResponse.json({ error: 'OpenClaw gateway not configured' }, { status: 503 });
-    }
 
-    // Build the refinement prompt
-    const existingRefinement = task.refinement ? `\n\nPrevious refinement:\n${task.refinement}` : '';
-    const feedbackSection = feedback ? `\n\nUser feedback on the refinement:\n${feedback}\n\nPlease update the refinement based on this feedback.` : '';
+    // Get chat history for context
+    const chatHistory = await getChatMessages(id);
+    const chatContext = chatHistory.map(m => 
+      `[${m.role === 'user' ? 'Jose Alejandro' : m.agent_id || 'Agent'}]: ${m.content}${m.images?.length ? ` (${m.images.length} image(s) attached)` : ''}`
+    ).join('\n');
 
-    const prompt = `You are refining a task for a software development board. Analyze the task and produce a structured refinement document in markdown.
+    const prompt = `Refine this task for the development board. 
 
-Task: ${task.title}
-Description: ${task.description || 'No description'}
-Priority: ${task.priority}
-Project: ${task.project_id || 'None'}
-${existingRefinement}${feedbackSection}
+**Task:** ${task.title}
+**Description:** ${task.description || 'No description'}
+**Priority:** ${task.priority}
+**Project:** ${task.project_id || 'None'}
 
-Produce a refinement with these sections (in markdown):
+${task.refinement ? `**Previous Refinement:**\n${task.refinement}\n` : ''}
+${chatContext ? `**Conversation:**\n${chatContext}\n` : ''}
+
+Produce a structured refinement in markdown with:
 ### Summary
-Brief clear description of what needs to be done.
-
-### Acceptance Criteria
-- [ ] Checkbox list of specific, testable criteria
-
+### Acceptance Criteria (checkbox list)
 ### Technical Approach
-How to implement this — key files, components, patterns.
-
 ### Edge Cases
-Things to watch out for.
-
 ### Estimated Effort
-Small / Medium / Large + brief justification.
 
-Reply ONLY with the markdown content, no preamble.`;
+Reply ONLY with the markdown. Be concise and specific.`;
 
-    // Call OpenClaw gateway to spawn a sub-agent
     const agentId = task.assignee || 'worker-code';
-    const spawnRes = await fetch(`${gateway.url}/api/sessions/spawn`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${gateway.token}`,
-      },
-      body: JSON.stringify({
-        task: prompt,
-        agentId,
-        label: `refine-${id}`,
-        cleanup: 'delete',
-        runTimeoutSeconds: 120,
-      }),
+
+    // Add agent "thinking" message
+    await addChatMessage(id, {
+      id: uuidv4(),
+      role: 'agent',
+      content: '⏳ Analyzing task and generating refinement...',
+      timestamp: new Date().toISOString(),
+      agent_id: agentId,
     });
 
-    if (!spawnRes.ok) {
-      const err = await spawnRes.text();
-      console.error('Spawn failed:', err);
-      
-      // Fallback: mark as pending refinement
-      await updateTask(id, {
-        refinement: (task.refinement || '') + '\n\n> ⏳ Refinement requested — agent will process shortly.',
-      });
-      
-      return NextResponse.json({ 
-        status: 'queued',
-        message: 'Refinement queued — agent will process shortly',
-      });
+    // Update task with "in progress" marker
+    await updateTask(id, {
+      refinement: '> ⏳ Refinement in progress...',
+    });
+
+    // Try to spawn via OpenClaw (non-blocking)
+    const gateway = await getGatewayConfig();
+    if (gateway) {
+      // Fire and forget — the agent will update the task when done
+      fetch(`${gateway.url}/api/v1/sessions/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${gateway.token}` },
+        body: JSON.stringify({
+          message: prompt,
+          label: `refine-task-${id}`,
+          agentId,
+        }),
+      }).catch(() => {});
     }
 
-    const spawnData = await spawnRes.json();
-
-    // Mark task as refinement in progress
-    await updateTask(id, {
-      refinement: (feedback && task.refinement ? task.refinement + '\n\n---\n\n' : '') + '> ⏳ Refinement in progress by ' + agentId + '...',
-    });
-
-    return NextResponse.json({
-      status: 'started',
-      sessionKey: spawnData.sessionKey,
-      agentId,
-    });
-
+    return NextResponse.json({ status: 'started', agentId });
   } catch (error: any) {
     console.error('Refine error:', error);
     return NextResponse.json({ error: error.message || 'Failed' }, { status: 500 });

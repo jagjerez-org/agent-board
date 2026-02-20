@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Task, TaskStatus, Priority, Project, TASK_STATUSES, PRIORITIES } from '@/lib/types';
 import {
   Sheet,
@@ -118,7 +118,12 @@ export function TaskSheet({ taskId, mode, open, onOpenChange, onSaved, defaultSt
   const [addingComment, setAddingComment] = useState(false);
   const [refinement, setRefinement] = useState('');
   const [refining, setRefining] = useState(false);
-  const [refineFeedback, setRefineFeedback] = useState('');
+  const [chatMessages, setChatMessages] = useState<{ id: string; role: string; content: string; images?: string[]; timestamp: string; agent_id?: string }[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatSending, setChatSending] = useState(false);
+  const [chatImages, setChatImages] = useState<{ file: File; preview: string }[]>([]);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Load projects and agents
   useEffect(() => {
@@ -206,6 +211,11 @@ export function TaskSheet({ taskId, mode, open, onOpenChange, onSaved, defaultSt
         .then(r => r.json())
         .then(data => setComments(data.comments || []))
         .catch(() => setComments([]));
+      // Load chat
+      fetch(`/api/tasks/${taskId}/chat`)
+        .then(r => r.json())
+        .then(data => setChatMessages(data.messages || []))
+        .catch(() => setChatMessages([]));
     } else if (mode === 'create' && open) {
       // Reset form
       setTitle('');
@@ -280,6 +290,40 @@ export function TaskSheet({ taskId, mode, open, onOpenChange, onSaved, defaultSt
 
   const removeLabel = (l: string) => setLabels(labels.filter((x) => x !== l));
 
+  // Send chat message
+  const sendChatMessage = async () => {
+    if (!chatInput.trim() && chatImages.length === 0) return;
+    setChatSending(true);
+    try {
+      // Upload images first
+      const uploadedImages: string[] = [];
+      for (const img of chatImages) {
+        const formData = new FormData();
+        formData.append('file', img.file);
+        const r = await fetch(`/api/tasks/${taskId}/chat/upload`, { method: 'POST', body: formData });
+        if (r.ok) {
+          const data = await r.json();
+          uploadedImages.push(data.path);
+        }
+      }
+      // Send message
+      const res = await fetch(`/api/tasks/${taskId}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: chatInput.trim() || '(image)', images: uploadedImages.length ? uploadedImages : undefined }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setChatMessages(prev => [...prev, data.message]);
+        setChatInput('');
+        chatImages.forEach(img => URL.revokeObjectURL(img.preview));
+        setChatImages([]);
+        setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+      }
+    } catch { /* ignore */ }
+    finally { setChatSending(false); }
+  };
+
   const handleSave = async () => {
     if (!title.trim()) return;
     setSaving(true);
@@ -353,96 +397,94 @@ export function TaskSheet({ taskId, mode, open, onOpenChange, onSaved, defaultSt
               <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe the task..." rows={4} />
             </div>
 
-            {/* Refinement Section */}
-            {(status === 'refinement' || refinement) && mode === 'edit' && (
-              <div className="border rounded-lg p-4 bg-muted/30">
-                <div className="flex items-center justify-between mb-3">
+            {/* Refinement Chat Section */}
+            {(status === 'refinement' || refinement || chatMessages.length > 0) && mode === 'edit' && (
+              <div className="border rounded-lg overflow-hidden bg-muted/20">
+                <div className="flex items-center justify-between px-4 py-2 border-b bg-muted/40">
                   <label className="text-sm font-bold flex items-center gap-2">
                     🔍 Refinement
-                    {refining && <span className="text-xs text-muted-foreground animate-pulse">Processing...</span>}
+                    {refining && <span className="text-xs text-yellow-500 animate-pulse">Agent working...</span>}
                   </label>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={refining || !assignee}
+                  <Button variant="outline" size="sm" disabled={refining || !assignee}
                     onClick={async () => {
                       setRefining(true);
                       try {
-                        const res = await fetch(`/api/tasks/${taskId}/refine`, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ feedback: refineFeedback }),
-                        });
-                        const data = await res.json();
-                        if (data.status === 'started' || data.status === 'queued') {
-                          setRefineFeedback('');
-                          // Poll for result
-                          const poll = setInterval(async () => {
-                            const r = await fetch(`/api/tasks/${taskId}`);
-                            const d = await r.json();
-                            const ref = (d.task as any)?.refinement || '';
-                            if (ref && !ref.includes('⏳')) {
-                              setRefinement(ref);
-                              setRefining(false);
-                              clearInterval(poll);
-                            }
-                          }, 3000);
-                          // Stop polling after 2 min
-                          setTimeout(() => { clearInterval(poll); setRefining(false); }, 120000);
-                        }
-                      } catch { setRefining(false); }
-                    }}
-                  >
-                    {refinement ? '🔄 Re-refine' : '✨ Refine'}
-                  </Button>
-                </div>
-                
-                {refinement ? (
-                  <div className="prose prose-sm prose-invert max-w-none mb-3 [&_h3]:text-base [&_h3]:font-semibold [&_h3]:mt-3 [&_h3]:mb-1 [&_ul]:my-1 [&_li]:my-0 [&_p]:my-1">
-                    <RefinementMarkdown content={refinement} />
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground mb-3">
-                    {assignee ? 'Click "Refine" to have the assigned agent analyze and refine this task.' : 'Assign an agent first to enable refinement.'}
-                  </p>
-                )}
-                
-                <div className="flex gap-2">
-                  <Textarea
-                    value={refineFeedback}
-                    onChange={(e) => setRefineFeedback(e.target.value)}
-                    placeholder="Give feedback to adjust the refinement..."
-                    rows={2}
-                    className="flex-1"
-                  />
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    disabled={!refineFeedback.trim() || refining || !assignee}
-                    className="self-end"
-                    onClick={async () => {
-                      setRefining(true);
-                      try {
-                        await fetch(`/api/tasks/${taskId}/refine`, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ feedback: refineFeedback }),
-                        });
-                        setRefineFeedback('');
+                        await fetch(`/api/tasks/${taskId}/refine`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+                        // Poll for updates
                         const poll = setInterval(async () => {
-                          const r = await fetch(`/api/tasks/${taskId}`);
-                          const d = await r.json();
-                          const ref = (d.task as any)?.refinement || '';
-                          if (ref && !ref.includes('⏳')) {
-                            setRefinement(ref);
-                            setRefining(false);
-                            clearInterval(poll);
-                          }
+                          const [taskRes, chatRes] = await Promise.all([
+                            fetch(`/api/tasks/${taskId}`), fetch(`/api/tasks/${taskId}/chat`),
+                          ]);
+                          const td = await taskRes.json(); const cd = await chatRes.json();
+                          setChatMessages(cd.messages || []);
+                          const ref = (td.task as any)?.refinement || '';
+                          if (ref && !ref.includes('⏳')) { setRefinement(ref); setRefining(false); clearInterval(poll); }
                         }, 3000);
                         setTimeout(() => { clearInterval(poll); setRefining(false); }, 120000);
                       } catch { setRefining(false); }
-                    }}
-                  >
+                    }}>
+                    {refinement ? '🔄 Re-refine' : '✨ Auto-refine'}
+                  </Button>
+                </div>
+
+                {/* Refinement document */}
+                {refinement && !refinement.includes('⏳') && (
+                  <div className="px-4 py-3 border-b bg-background/50">
+                    <div className="prose prose-sm prose-invert max-w-none [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:mt-3 [&_h3]:mb-1 [&_ul]:my-1 [&_li]:my-0 [&_p]:my-1 [&_input[type=checkbox]]:mr-1.5">
+                      <RefinementMarkdown content={refinement} />
+                    </div>
+                  </div>
+                )}
+
+                {/* Chat messages */}
+                <div className="max-h-64 overflow-y-auto px-4 py-2 space-y-3">
+                  {chatMessages.map(msg => (
+                    <div key={msg.id} className={cn("flex gap-2", msg.role === 'user' ? "justify-end" : "justify-start")}>
+                      <div className={cn("rounded-lg px-3 py-2 max-w-[85%] text-sm",
+                        msg.role === 'user' ? "bg-primary text-primary-foreground" : "bg-muted")}>
+                        {msg.role === 'agent' && <span className="text-xs text-muted-foreground block mb-1">🤖 {msg.agent_id || 'Agent'}</span>}
+                        <div className="whitespace-pre-wrap">{msg.content}</div>
+                        {msg.images?.map((img, i) => (
+                          <img key={i} src={img} alt="" className="mt-2 rounded max-h-40 max-w-full" />
+                        ))}
+                        <span className="text-[10px] opacity-50 block mt-1">
+                          {new Date(msg.timestamp).toLocaleTimeString()}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                  <div ref={chatEndRef} />
+                </div>
+
+                {/* Image previews */}
+                {chatImages.length > 0 && (
+                  <div className="px-4 py-1 flex gap-2 border-t">
+                    {chatImages.map((img, i) => (
+                      <div key={i} className="relative">
+                        <img src={img.preview} alt="" className="h-16 rounded" />
+                        <button className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full w-4 h-4 text-xs flex items-center justify-center"
+                          onClick={() => { URL.revokeObjectURL(img.preview); setChatImages(prev => prev.filter((_, j) => j !== i)); }}>×</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Chat input */}
+                <div className="px-3 py-2 border-t flex gap-2 items-end">
+                  <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden"
+                    onChange={e => {
+                      const files = Array.from(e.target.files || []);
+                      setChatImages(prev => [...prev, ...files.map(f => ({ file: f, preview: URL.createObjectURL(f) }))]);
+                      e.target.value = '';
+                    }} />
+                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0 shrink-0" onClick={() => fileInputRef.current?.click()}>
+                    📎
+                  </Button>
+                  <Textarea value={chatInput} onChange={e => setChatInput(e.target.value)}
+                    placeholder="Message the agent..." rows={1} className="flex-1 min-h-[36px] max-h-24 resize-none"
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage(); } }} />
+                  <Button size="sm" className="h-8 shrink-0" disabled={chatSending || (!chatInput.trim() && chatImages.length === 0)}
+                    onClick={sendChatMessage}>
                     Send
                   </Button>
                 </div>
