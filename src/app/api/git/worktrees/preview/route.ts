@@ -192,7 +192,7 @@ export async function POST(request: NextRequest) {
       `${homeDir}/.local/bin`,
       '/usr/local/bin',
     ].join(':');
-    const env = { ...process.env, PORT: port.toString(), PATH: `${extraPaths}:${process.env.PATH}` };
+    const env = { ...process.env, PORT: port.toString(), HOST: '0.0.0.0', PATH: `${extraPaths}:${process.env.PATH}` };
     
     // Spawn the dev server process
     const childProcess = spawn('bash', ['-c', command], {

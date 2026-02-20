@@ -84,7 +84,7 @@ async function detectFlutterApp(dir: string, relativePath: string, usedPorts: Se
     return {
       name,
       type: 'flutter',
-      command: `flutter run -d web-server --web-port=${port}`,
+      command: `flutter run -d web-server --web-hostname=0.0.0.0 --web-port=${port}`,
       cwd: relativePath,
       port,
     };
