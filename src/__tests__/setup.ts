@@ -7,7 +7,7 @@ import { tmpdir } from 'os';
 const testDataDir = path.join(tmpdir(), 'agent-board-tests', Date.now().toString());
 
 // Mock the DATA_DIR to use temp directory
-process.env.NODE_ENV = 'test';
+Object.defineProperty(process.env, 'NODE_ENV', { value: 'test', writable: true });
 (global as Record<string, unknown>).__TEST_DATA_DIR__ = testDataDir;
 
 // Clean up function
