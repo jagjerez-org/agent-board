@@ -35,7 +35,8 @@ jobs:
 
   publish-clawhub:
     needs: ci
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    # Disabled: ClawHub requires GitHub account > 7 days old. Re-enable after ~2026-02-24.
+    if: false && github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
 
     steps:
