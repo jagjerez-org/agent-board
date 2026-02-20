@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Activity, Users, FolderOpen, GitBranch, Wrench, LayoutDashboard, Code } from 'lucide-react';
+import { Activity, Users, FolderOpen, GitBranch, Wrench, LayoutDashboard } from 'lucide-react';
 
 const navItems = [
   { href: '/', label: 'Board', icon: LayoutDashboard },
@@ -12,7 +12,6 @@ const navItems = [
   { href: '/skills', label: 'Skills', icon: Wrench },
   { href: '/activity', label: 'Activity', icon: Activity },
   { href: '/worktrees', label: 'Worktrees', icon: GitBranch },
-  { href: '/editor', label: 'Editor', icon: Code },
 ];
 
 export function TopNav() {
@@ -30,7 +29,7 @@ export function TopNav() {
                 variant="ghost"
                 size="sm"
                 asChild
-                className={pathname === href ? 'bg-accent text-accent-foreground' : ''}
+                className={(pathname === href || (href !== '/' && pathname.startsWith(href + '/'))) ? 'bg-accent text-accent-foreground' : ''}
               >
                 <Link href={href}>
                   <Icon className="w-4 h-4 mr-2" />

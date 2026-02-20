@@ -866,7 +866,7 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
                                 </span>
                                 <div className="flex items-center gap-1">
                                   <Button variant="ghost" size="sm" onClick={() => {
-                                    const editorUrl = `/editor?project=${selectedProject}&branch=${wt.branch}`;
+                                    const editorUrl = `/projects/editor?project=${selectedProject}&branch=${wt.branch}`;
                                     window.open(editorUrl, '_blank');
                                   }} title="Open in full page">
                                     <ExternalLink className="w-3 h-3" />
@@ -874,7 +874,7 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
                                 </div>
                               </div>
                               <iframe
-                                src={`/editor?project=${encodeURIComponent(selectedProject)}&branch=${encodeURIComponent(wt.branch)}&embedded=true`}
+                                src={`/projects/editor?project=${encodeURIComponent(selectedProject)}&branch=${encodeURIComponent(wt.branch)}&embedded=true`}
                                 className="w-full border-0"
                                 style={{ height: '500px' }}
                                 title={`Editor: ${wt.branch}`}
