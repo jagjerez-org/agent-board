@@ -30,7 +30,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
       >
         <TooltipProvider>
-          <div className="flex h-screen overflow-hidden">
+          <div className="flex min-h-screen">
             <div className="flex-1 flex flex-col">
               <TopNav />
               {children}
