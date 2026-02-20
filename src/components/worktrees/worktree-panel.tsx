@@ -650,9 +650,16 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
                                       }}>
                                         <RefreshCw className="w-3 h-3" />
                                       </Button>
-                                      <Button variant="ghost" size="sm" onClick={() => window.open(`http://localhost:${server.port}`, '_blank')}>
+                                      <Button variant="ghost" size="sm" onClick={() => window.open(`http://${window.location.hostname}:${server.port}`, '_blank')}>
                                         <ExternalLink className="w-3 h-3" />
                                       </Button>
+                                      <Button variant="ghost" size="sm" onClick={() => stopPreview(wt.branch)} disabled={stoppingServers.has(wt.branch)}>
+                                        <Square className="w-3 h-3" />
+                                      </Button>
+                                    </>
+                                  ) : server?.status === 'starting' ? (
+                                    <>
+                                      <Badge variant="secondary" className="text-[10px]"><Loader2 className="w-3 h-3 mr-1 animate-spin inline" />Starting...</Badge>
                                       <Button variant="ghost" size="sm" onClick={() => stopPreview(wt.branch)} disabled={stoppingServers.has(wt.branch)}>
                                         <Square className="w-3 h-3" />
                                       </Button>
@@ -669,15 +676,48 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
                                 <div className="aspect-video bg-gray-100">
                                   <iframe
                                     ref={(el) => { if (el) iframeRefs.current.set(wt.branch, el); }}
-                                    src={`http://localhost:${server.port}`}
+                                    src={`http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:${server.port}`}
                                     className="w-full h-full border-0"
                                     title={`Preview: ${wt.branch}`}
                                     sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
                                   />
                                 </div>
+                              ) : server?.status === 'starting' ? (
+                                <div className="py-4 px-3">
+                                  <div className="flex items-center gap-2 mb-2 text-sm text-muted-foreground">
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                    Starting preview server...
+                                    <code className="text-xs bg-muted px-1 py-0.5 rounded">{server.command}</code>
+                                  </div>
+                                  <div className="bg-black/90 rounded p-2 max-h-32 overflow-y-auto font-mono text-xs text-green-400">
+                                    {(logs.get(wt.branch) || []).slice(-10).map((log, i) => (
+                                      <div key={i} className={log.type === 'stderr' ? 'text-red-400' : log.type === 'system' ? 'text-yellow-400' : ''}>
+                                        {log.message}
+                                      </div>
+                                    ))}
+                                    {(!logs.get(wt.branch) || logs.get(wt.branch)!.length === 0) && (
+                                      <div className="text-muted-foreground">Waiting for output...</div>
+                                    )}
+                                  </div>
+                                </div>
+                              ) : server?.status === 'error' ? (
+                                <div className="py-4 px-3">
+                                  <div className="flex items-center gap-2 mb-2 text-sm text-destructive">
+                                    <AlertCircle className="w-4 h-4" />
+                                    Preview server failed
+                                  </div>
+                                  <div className="bg-black/90 rounded p-2 max-h-32 overflow-y-auto font-mono text-xs text-red-400">
+                                    {(logs.get(wt.branch) || []).slice(-10).map((log, i) => (
+                                      <div key={i}>{log.message}</div>
+                                    ))}
+                                  </div>
+                                  <Button size="sm" className="mt-2" onClick={() => openPreviewDialog(wt.branch)}>
+                                    <Play className="w-3 h-3 mr-1" /> Retry
+                                  </Button>
+                                </div>
                               ) : (
                                 <div className="py-8 text-center text-muted-foreground text-sm">
-                                  {startingServers.has(wt.branch) ? 'Starting preview server...' : 'No preview server running. Click "Start Preview" to launch.'}
+                                  No preview server running. Click &quot;Start Preview&quot; to launch.
                                 </div>
                               )}
                             </div>
