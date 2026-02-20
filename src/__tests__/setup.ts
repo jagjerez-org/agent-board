@@ -7,8 +7,14 @@ import { tmpdir } from 'os';
 const testDataDir = path.join(tmpdir(), 'agent-board-tests', Date.now().toString());
 
 // Mock the DATA_DIR to use temp directory
-Object.defineProperty(process.env, 'NODE_ENV', { value: 'test', writable: true });
+// NODE_ENV is already set by vitest
 (global as Record<string, unknown>).__TEST_DATA_DIR__ = testDataDir;
+
+// Ensure test directories exist
+await fs.mkdir(path.join(testDataDir, 'data', 'tasks'), { recursive: true });
+await fs.mkdir(path.join(testDataDir, 'data', 'projects'), { recursive: true });
+await fs.mkdir(path.join(testDataDir, 'data', 'agents'), { recursive: true });
+await fs.mkdir(path.join(testDataDir, 'data', 'config'), { recursive: true });
 
 // Clean up function
 export async function cleanupTestDir() {
