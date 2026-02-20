@@ -134,6 +134,7 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
   const [projectSearch, setProjectSearch] = useState('');
   const [projectOpen, setProjectOpen] = useState(false);
   const [loadingBranches, setLoadingBranches] = useState(false);
+  const [previewDialog, setPreviewDialog] = useState<{ open: boolean; branch: string; command: string }>({ open: false, branch: '', command: '' });
 
   // Resolve project ID to repo-style path
   const getRepoProjectId = useCallback((pid: string) => {
@@ -292,6 +293,10 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
   }, [logs, autoScroll, expandedLogs]);
 
   // Preview server actions
+  const openPreviewDialog = (branch: string) => {
+    setPreviewDialog({ open: true, branch, command: 'pnpm dev' });
+  };
+
   const startPreview = async (branch: string, command = 'pnpm dev') => {
     setStartingServers(prev => new Set([...prev, branch]));
     try {
@@ -627,7 +632,7 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
                                       </Button>
                                     </>
                                   ) : (
-                                    <Button size="sm" onClick={() => startPreview(wt.branch)} disabled={startingServers.has(wt.branch)}>
+                                    <Button size="sm" onClick={() => openPreviewDialog(wt.branch)} disabled={startingServers.has(wt.branch)}>
                                       {startingServers.has(wt.branch) ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Play className="w-3 h-3 mr-1" />}
                                       Start Preview
                                     </Button>
@@ -823,6 +828,46 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
           </Card>
         </>
       )}
+
+      {/* Preview Command Dialog */}
+      <Dialog open={previewDialog.open} onOpenChange={(open) => { if (!open) setPreviewDialog(p => ({ ...p, open: false })); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Start Preview Server</DialogTitle>
+            <DialogDescription>
+              Run a dev server for <strong>{previewDialog.branch}</strong>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div>
+              <Label className="text-sm font-medium mb-1 block">Command</Label>
+              <Input
+                value={previewDialog.command}
+                onChange={(e) => setPreviewDialog(p => ({ ...p, command: e.target.value }))}
+                placeholder="e.g. pnpm dev, flutter run -d web-server, npm start"
+              />
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {['pnpm dev', 'npm run dev', 'flutter run -d web-server --web-port=3200', 'yarn dev'].map(cmd => (
+                <Button key={cmd} variant="outline" size="sm" className="text-xs h-7"
+                  onClick={() => setPreviewDialog(p => ({ ...p, command: cmd }))}>
+                  {cmd}
+                </Button>
+              ))}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPreviewDialog(p => ({ ...p, open: false }))}>Cancel</Button>
+            <Button onClick={() => {
+              const { branch, command } = previewDialog;
+              setPreviewDialog(p => ({ ...p, open: false }));
+              startPreview(branch, command);
+            }} disabled={!previewDialog.command.trim()}>
+              <Play className="w-3 h-3 mr-1" /> Start
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
