@@ -1,3 +1,4 @@
+import { getGatewayConfig } from "@/lib/gateway";
 // POST /api/tasks/[id]/execute — auto-execute a refined task
 // Moves task to in_progress, spawns agent work, on completion moves to review
 import { NextRequest, NextResponse } from 'next/server';
@@ -14,16 +15,6 @@ interface Props {
 
 const EXEC_DIR = join(process.cwd(), 'data', 'executions');
 
-async function getGatewayConfig(): Promise<{ url: string; token: string } | null> {
-  try {
-    const configPath = join(process.env.HOME || '/root', '.openclaw/openclaw.json');
-    const config = JSON.parse(await readFile(configPath, 'utf8'));
-    const port = config.gateway?.port || 18789;
-    const token = config.gateway?.auth?.token;
-    if (!token) return null;
-    return { url: `http://localhost:${port}`, token };
-  } catch { return null; }
-}
 
 // GET /api/tasks/[id]/execute — poll execution status
 export async function GET(_request: NextRequest, { params }: Props) {

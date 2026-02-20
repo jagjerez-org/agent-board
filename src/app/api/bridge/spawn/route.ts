@@ -1,17 +1,8 @@
+import { getGatewayConfig } from "@/lib/gateway";
 import { NextRequest, NextResponse } from 'next/server';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
 
-async function getGatewayConfig(): Promise<{ url: string; token: string } | null> {
-  try {
-    const configPath = join(process.env.HOME || '/root', '.openclaw/openclaw.json');
-    const config = JSON.parse(await readFile(configPath, 'utf8'));
-    const port = config.gateway?.port || 18789;
-    const token = config.gateway?.auth?.token;
-    if (!token) return null;
-    return { url: `http://localhost:${port}`, token };
-  } catch { return null; }
-}
 
 // POST /api/bridge/spawn — send a wake event to OpenClaw that triggers a spawn
 export async function POST(request: NextRequest) {

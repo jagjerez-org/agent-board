@@ -1,3 +1,4 @@
+import { getGatewayConfig } from "@/lib/gateway";
 import { NextRequest, NextResponse } from 'next/server';
 import { getTask, updateTask } from '@/lib/task-store';
 import { readFile, writeFile, mkdir } from 'fs/promises';
@@ -34,16 +35,6 @@ async function addChatMessage(taskId: string, msg: ChatMessage) {
   await writeFile(join(CHAT_DIR, `${taskId}.json`), JSON.stringify(messages, null, 2), 'utf8');
 }
 
-async function getGatewayConfig(): Promise<{ url: string; token: string } | null> {
-  try {
-    const configPath = join(process.env.HOME || '/root', '.openclaw/openclaw.json');
-    const config = JSON.parse(await readFile(configPath, 'utf8'));
-    const port = config.gateway?.port || 18789;
-    const token = config.gateway?.auth?.token;
-    if (!token) return null;
-    return { url: `http://localhost:${port}`, token };
-  } catch { return null; }
-}
 
 // GET /api/tasks/[id]/refine — poll refinement status
 export async function GET(_request: NextRequest, { params }: Props) {
