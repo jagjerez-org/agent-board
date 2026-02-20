@@ -53,6 +53,7 @@ jobs:
         env:
           CLAWHUB_TOKEN: ${{ secrets.CLAWHUB_TOKEN }}
         run: |
+          clawhub login --token "$CLAWHUB_TOKEN"
           clawhub publish . \
             --slug agent-board \
             --name "Agent Board" \
