@@ -337,11 +337,22 @@ export async function POST(request: NextRequest) {
       startedAt: new Date().toISOString()
     };
     
+    // Extend PATH with common tool locations
+    const homeDir = process.env.HOME || '/root';
+    const extraPaths = [
+      `${homeDir}/flutter/bin`,
+      `${homeDir}/.pub-cache/bin`,
+      `${homeDir}/.npm-global/bin`,
+      `${homeDir}/.local/bin`,
+      '/usr/local/bin',
+    ].join(':');
+    const env = { ...process.env, PATH: `${extraPaths}:${process.env.PATH}` };
+    
     // Spawn the command
     const childProcess = spawn('bash', ['-c', command], {
       cwd: worktree.path,
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: process.env
+      env
     });
     
     if (!childProcess.pid) {

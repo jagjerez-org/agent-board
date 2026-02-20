@@ -183,7 +183,16 @@ export async function POST(request: NextRequest) {
     const port = requestedPort || await findAvailablePort();
     
     // Set up environment with the specified port
-    const env = { ...process.env, PORT: port.toString() };
+    // Extend PATH with common tool locations
+    const homeDir = process.env.HOME || '/root';
+    const extraPaths = [
+      `${homeDir}/flutter/bin`,
+      `${homeDir}/.pub-cache/bin`,
+      `${homeDir}/.npm-global/bin`,
+      `${homeDir}/.local/bin`,
+      '/usr/local/bin',
+    ].join(':');
+    const env = { ...process.env, PORT: port.toString(), PATH: `${extraPaths}:${process.env.PATH}` };
     
     // Spawn the dev server process
     const childProcess = spawn('bash', ['-c', command], {
