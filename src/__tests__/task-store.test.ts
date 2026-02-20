@@ -3,6 +3,12 @@ import * as taskStore from '@/lib/task-store';
 import { cleanupTestDir } from './setup';
 
 describe('Task Store', () => {
+  beforeEach(async () => {
+    // Ensure test directories exist before each test (cleanupTestDir removes them)
+    const { ensureDataDirs } = await import('@/lib/storage');
+    await ensureDataDirs();
+  });
+
   afterEach(async () => {
     await cleanupTestDir();
   });

@@ -65,6 +65,7 @@ export async function readTask(id: string): Promise<{ task: Task; comments: Comm
     
     const task: Task = {
       ...parsed.data as Omit<Task, 'description'>,
+      id, // Always use filename-derived id as source of truth
       description: descriptionPart || undefined,
       refinement: refinementMatch ? refinementMatch[1].trim() : undefined,
     } as Task;
