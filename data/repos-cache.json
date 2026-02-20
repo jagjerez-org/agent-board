@@ -1,6 +1,19 @@
 {
   "repos": [
     {
+      "id": "hubdance/kadens",
+      "name": "kadens",
+      "full_name": "hubdance/kadens",
+      "description": "",
+      "url": "https://github.com/hubdance/kadens",
+      "clone_url": "https://github.com/hubdance/kadens.git",
+      "default_branch": "master",
+      "is_private": true,
+      "provider": "GitHub - Jarvis",
+      "owner": "hubdance",
+      "updated_at": "2026-02-20T10:47:25Z"
+    },
+    {
       "id": "jagjerez-org/agent-board",
       "name": "agent-board",
       "full_name": "jagjerez-org/agent-board",
@@ -11,7 +24,7 @@
       "is_private": false,
       "provider": "GitHub - Jarvis",
       "owner": "jagjerez-org",
-      "updated_at": "2026-02-20T10:38:48Z"
+      "updated_at": "2026-02-20T10:45:01Z"
     },
     {
       "id": "educabrera1997/ALA APP",
@@ -38,19 +51,6 @@
       "provider": "GitHub - Jarvis",
       "owner": "jagjerez-org",
       "updated_at": "2026-02-20T08:52:38Z"
-    },
-    {
-      "id": "hubdance/kadens",
-      "name": "kadens",
-      "full_name": "hubdance/kadens",
-      "description": "",
-      "url": "https://github.com/hubdance/kadens",
-      "clone_url": "https://github.com/hubdance/kadens.git",
-      "default_branch": "master",
-      "is_private": true,
-      "provider": "GitHub - Jarvis",
-      "owner": "hubdance",
-      "updated_at": "2026-02-20T07:30:38Z"
     },
     {
       "id": "jagjerez-org/3d-mcp-server",
@@ -586,5 +586,5 @@
       "updated_at": "2022-05-16T06:29:09.558Z"
     }
   ],
-  "last_updated": "2026-02-20T10:39:17.954Z"
+  "last_updated": "2026-02-20T10:51:34.426Z"
 }

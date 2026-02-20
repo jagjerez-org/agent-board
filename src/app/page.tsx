@@ -4,8 +4,7 @@ import { useState, useRef } from 'react';
 import { KanbanBoard } from '@/components/board/kanban-board-simple';
 import { ProjectSelector } from '@/components/board/project-selector';
 import { Button } from '@/components/ui/button';
-import { Plus, Settings, Activity, Users, FolderOpen, GitBranch, Wrench } from 'lucide-react';
-import Link from 'next/link';
+import { Plus, Settings } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
@@ -19,57 +18,16 @@ export default function BoardPage() {
   const createTaskRef = useRef<(() => void) | null>(null);
 
   return (
-    <div className="flex flex-col h-screen">
-      {/* Header */}
-      <header className="border-b border-border bg-card">
-        <div className="flex items-center justify-between px-6 py-3">
-          <div className="flex items-center space-x-4">
-            <h1 className="text-2xl font-bold">📋 Agent Board</h1>
-            <nav className="flex space-x-1">
-              <Button variant="ghost" size="sm" asChild>
-                <Link href="/" className="bg-accent text-accent-foreground">Board</Link>
-              </Button>
-              <Button variant="ghost" size="sm" asChild>
-                <Link href="/projects">
-                  <FolderOpen className="w-4 h-4 mr-2" />
-                  Projects
-                </Link>
-              </Button>
-              <Button variant="ghost" size="sm" asChild>
-                <Link href="/agents">
-                  <Users className="w-4 h-4 mr-2" />
-                  Agents
-                </Link>
-              </Button>
-              <Button variant="ghost" size="sm" asChild>
-                <Link href="/skills">
-                  <Wrench className="w-4 h-4 mr-2" />
-                  Skills
-                </Link>
-              </Button>
-              <Button variant="ghost" size="sm" asChild>
-                <Link href="/activity">
-                  <Activity className="w-4 h-4 mr-2" />
-                  Activity
-                </Link>
-              </Button>
-              <Button variant="ghost" size="sm" asChild>
-                <Link href="/worktrees">
-                  <GitBranch className="w-4 h-4 mr-2" />
-                  Worktrees
-                </Link>
-              </Button>
-            </nav>
-          </div>
-          
-          {/* Project Selector */}
+    <div className="flex flex-col flex-1">
+      {/* Board toolbar */}
+      <div className="border-b border-border bg-card">
+        <div className="flex items-center justify-between px-6 py-2">
           <div className="flex-1 flex justify-center">
             <ProjectSelector
               value={selectedProject}
               onValueChange={setSelectedProject}
             />
           </div>
-          
           <div className="flex items-center space-x-2">
             <Button variant="ghost" size="icon" onClick={() => setSettingsOpen(true)} title="Settings">
               <Settings className="w-4 h-4" />
@@ -80,7 +38,7 @@ export default function BoardPage() {
             </Button>
           </div>
         </div>
-      </header>
+      </div>
 
       {/* Main content */}
       <main className="flex-1 overflow-hidden">

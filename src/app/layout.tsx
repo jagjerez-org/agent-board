@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { TopNav } from "@/components/layout/top-nav";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -31,6 +32,7 @@ export default function RootLayout({
         <TooltipProvider>
           <div className="flex h-screen overflow-hidden">
             <div className="flex-1 flex flex-col">
+              <TopNav />
               {children}
             </div>
           </div>

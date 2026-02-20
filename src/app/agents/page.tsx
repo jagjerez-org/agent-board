@@ -139,52 +139,6 @@ export default function AgentsPage() {
   return (
     <div className="flex flex-col h-screen">
       {/* Header */}
-      <header className="border-b border-border bg-card">
-        <div className="flex items-center justify-between px-6 py-3">
-          <div className="flex items-center space-x-4">
-            <h1 className="text-2xl font-bold">📋 Agent Board</h1>
-            <nav className="flex space-x-1">
-              <Button variant="ghost" size="sm" asChild>
-                <Link href="/">Board</Link>
-              </Button>
-              <Button variant="ghost" size="sm" asChild>
-                <Link href="/projects">
-                  <FolderOpen className="w-4 h-4 mr-2" />
-                  Projects
-                </Link>
-              </Button>
-              <Button variant="ghost" size="sm" asChild>
-                <Link href="/agents" className="bg-accent text-accent-foreground">
-                  <Users className="w-4 h-4 mr-2" />
-                  Agents
-                </Link>
-              </Button>
-              <Button variant="ghost" size="sm" asChild>
-                <Link href="/activity">
-                  <Activity className="w-4 h-4 mr-2" />
-                  Activity
-                </Link>
-              </Button>
-              <Button variant="ghost" size="sm" asChild>
-                <Link href="/worktrees">
-                  <GitBranch className="w-4 h-4 mr-2" />
-                  Worktrees
-                </Link>
-              </Button>
-            </nav>
-          </div>
-
-          <div className="flex items-center space-x-2">
-            <Button variant="outline" size="sm" onClick={handleSeed} disabled={seeding}>
-              {seeding ? 'Seeding...' : 'Seed Agents'}
-            </Button>
-            <Button size="sm" onClick={() => setShowRegister(true)}>
-              <Plus className="w-4 h-4 mr-2" />
-              Register Agent
-            </Button>
-          </div>
-        </div>
-      </header>
 
       {/* Main content */}
       <main className="flex-1 overflow-hidden p-6">

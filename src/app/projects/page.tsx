@@ -334,89 +334,22 @@ export default function ProjectsPage() {
 
   if (loading) {
     return (
-      <div className="flex flex-col h-screen">
-        <header className="border-b border-border bg-card">
-          <div className="flex items-center justify-between px-6 py-3">
-            <div className="flex items-center space-x-4">
-              <h1 className="text-2xl font-bold">📋 Agent Board</h1>
-              <nav className="flex space-x-1">
-                <Button variant="ghost" size="sm" asChild>
-                  <Link href="/">Board</Link>
-                </Button>
-                <Button variant="ghost" size="sm" asChild>
-                  <Link href="/projects" className="bg-accent text-accent-foreground">
-                    <FolderOpen className="w-4 h-4 mr-2" />
-                    Projects
-                  </Link>
-                </Button>
-                <Button variant="ghost" size="sm" asChild>
-                  <Link href="/agents">
-                    <Users className="w-4 h-4 mr-2" />
-                    Agents
-                  </Link>
-                </Button>
-                <Button variant="ghost" size="sm" asChild>
-                  <Link href="/activity">
-                    <Activity className="w-4 h-4 mr-2" />
-                    Activity
-                  </Link>
-                </Button>
-              </nav>
-            </div>
+      <main className="flex-1 p-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-4" />
+            <p>Loading projects...</p>
           </div>
-        </header>
-        
-        <main className="flex-1 p-6">
-          <div className="flex items-center justify-center h-64">
-            <div className="text-center">
-              <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-4" />
-              <p>Loading projects...</p>
-            </div>
-          </div>
-        </main>
-      </div>
+        </div>
+      </main>
     );
   }
 
   return (
-    <div className="flex flex-col h-screen">
-      {/* Header */}
-      <header className="border-b border-border bg-card">
-        <div className="flex items-center justify-between px-6 py-3">
-          <div className="flex items-center space-x-4">
-            <h1 className="text-2xl font-bold">📋 Agent Board</h1>
-            <nav className="flex space-x-1">
-              <Button variant="ghost" size="sm" asChild>
-                <Link href="/">Board</Link>
-              </Button>
-              <Button variant="ghost" size="sm" asChild>
-                <Link href="/projects" className="bg-accent text-accent-foreground">
-                  <FolderOpen className="w-4 h-4 mr-2" />
-                  Projects
-                </Link>
-              </Button>
-              <Button variant="ghost" size="sm" asChild>
-                <Link href="/agents">
-                  <Users className="w-4 h-4 mr-2" />
-                  Agents
-                </Link>
-              </Button>
-              <Button variant="ghost" size="sm" asChild>
-                <Link href="/activity">
-                  <Activity className="w-4 h-4 mr-2" />
-                  Activity
-                </Link>
-              </Button>
-              <Button variant="ghost" size="sm" asChild>
-                <Link href="/worktrees">
-                  <GitBranch className="w-4 h-4 mr-2" />
-                  Worktrees
-                </Link>
-              </Button>
-            </nav>
-          </div>
-          
-          <div className="flex items-center space-x-2">
+    <div className="flex flex-col flex-1">
+      {/* Toolbar */}
+      <div className="border-b border-border bg-card">
+        <div className="flex items-center justify-end px-6 py-2 space-x-2">
             {/* Settings Sheet */}
             <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
               <SheetTrigger asChild>
@@ -603,9 +536,8 @@ export default function ProjectsPage() {
               <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
               Refresh from Git
             </Button>
-          </div>
         </div>
-      </header>
+      </div>
 
       {/* Main content with sidebar */}
       <main className="flex flex-1 overflow-hidden">
