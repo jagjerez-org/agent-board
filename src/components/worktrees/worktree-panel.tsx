@@ -293,8 +293,27 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
   }, [logs, autoScroll, expandedLogs]);
 
   // Preview server actions
-  const openPreviewDialog = (branch: string) => {
-    setPreviewDialog({ open: true, branch, command: 'pnpm dev', cwd: '' });
+  interface DetectedApp { name: string; type: string; command: string; cwd: string; port?: number; packageManager?: string }
+  const [detectedApps, setDetectedApps] = useState<DetectedApp[]>([]);
+  const [detecting, setDetecting] = useState(false);
+
+  const openPreviewDialog = async (branch: string) => {
+    setPreviewDialog({ open: true, branch, command: '', cwd: '' });
+    setDetectedApps([]);
+    setDetecting(true);
+    try {
+      const res = await fetch(`/api/git/worktrees/detect?project=${encodeURIComponent(selectedProject)}&branch=${encodeURIComponent(branch)}`);
+      if (res.ok) {
+        const data = await res.json();
+        const apps: DetectedApp[] = data.apps || [];
+        setDetectedApps(apps);
+        // Auto-select first app
+        if (apps.length > 0) {
+          setPreviewDialog(p => ({ ...p, command: apps[0].command, cwd: apps[0].cwd === '.' ? '' : apps[0].cwd }));
+        }
+      }
+    } catch { /* ignore */ }
+    setDetecting(false);
   };
 
   const startPreview = async (branch: string, command = 'pnpm dev') => {
@@ -844,37 +863,51 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2">
+            {/* Auto-detected apps */}
+            {detecting ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                <Loader2 className="w-4 h-4 animate-spin" /> Detecting project type...
+              </div>
+            ) : detectedApps.length > 0 ? (
+              <div>
+                <Label className="text-sm font-medium mb-2 block">Detected Apps</Label>
+                <div className="space-y-1">
+                  {detectedApps.map(app => (
+                    <button key={`${app.cwd}-${app.name}`}
+                      className={`w-full text-left p-2 rounded border text-sm hover:bg-muted/50 transition-colors ${
+                        previewDialog.command === app.command && previewDialog.cwd === (app.cwd === '.' ? '' : app.cwd) ? 'border-primary bg-muted/50' : ''
+                      }`}
+                      onClick={() => setPreviewDialog(p => ({ ...p, command: app.command, cwd: app.cwd === '.' ? '' : app.cwd }))}>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-[10px]">{app.type}</Badge>
+                        <span className="font-medium">{app.name}</span>
+                        {app.port && <span className="text-muted-foreground text-xs">:{app.port}</span>}
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        {app.cwd !== '.' ? `${app.cwd} → ` : ''}{app.command}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {/* Manual override */}
             <div>
-              <Label className="text-sm font-medium mb-1 block">Command</Label>
+              <Label className="text-sm font-medium mb-1 block">Command {detectedApps.length > 0 && <span className="text-muted-foreground font-normal">(or override)</span>}</Label>
               <Input
                 value={previewDialog.command}
                 onChange={(e) => setPreviewDialog(p => ({ ...p, command: e.target.value }))}
                 placeholder="e.g. pnpm dev, flutter run -d web-server, npm start"
               />
             </div>
-            <div className="flex flex-wrap gap-1">
-              {['pnpm dev', 'npm run dev', 'flutter run -d web-server --web-port=3200', 'yarn dev'].map(cmd => (
-                <Button key={cmd} variant="outline" size="sm" className="text-xs h-7"
-                  onClick={() => setPreviewDialog(p => ({ ...p, command: cmd }))}>
-                  {cmd}
-                </Button>
-              ))}
-            </div>
             <div>
-              <Label className="text-sm font-medium mb-1 block">Subdirectory <span className="text-muted-foreground font-normal">(optional, for monorepos)</span></Label>
+              <Label className="text-sm font-medium mb-1 block">Subdirectory <span className="text-muted-foreground font-normal">(for monorepos)</span></Label>
               <Input
                 value={previewDialog.cwd}
                 onChange={(e) => setPreviewDialog(p => ({ ...p, cwd: e.target.value }))}
                 placeholder="e.g. apps/ala_app, packages/web"
               />
-            </div>
-            <div className="flex flex-wrap gap-1">
-              {['apps/ala_app', 'apps/web', 'apps/api', 'packages/web'].map(dir => (
-                <Button key={dir} variant="outline" size="sm" className="text-xs h-7"
-                  onClick={() => setPreviewDialog(p => ({ ...p, cwd: dir }))}>
-                  {dir}
-                </Button>
-              ))}
             </div>
           </div>
           <DialogFooter>
