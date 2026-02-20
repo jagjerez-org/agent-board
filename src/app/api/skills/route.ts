@@ -13,11 +13,25 @@ async function getSkillDescription(skillDir: string): Promise<string> {
   try {
     const skillMd = path.join(skillDir, 'SKILL.md');
     const content = await fs.readFile(skillMd, 'utf8');
-    // Get first non-empty, non-header line
+    
+    // Parse YAML frontmatter if present
+    if (content.startsWith('---')) {
+      const endIdx = content.indexOf('---', 3);
+      if (endIdx !== -1) {
+        const frontmatter = content.substring(3, endIdx);
+        const descMatch = frontmatter.match(/description:\s*"?([^"\n]+)"?/);
+        if (descMatch) return descMatch[1].trim().slice(0, 200);
+      }
+    }
+    
+    // Fallback: first non-empty, non-header, non-frontmatter line
+    let inFrontmatter = false;
     for (const line of content.split('\n')) {
       const trimmed = line.trim();
-      if (trimmed && !trimmed.startsWith('#') && trimmed !== '---') {
-        return trimmed.slice(0, 150);
+      if (trimmed === '---') { inFrontmatter = !inFrontmatter; continue; }
+      if (inFrontmatter) continue;
+      if (trimmed && !trimmed.startsWith('#')) {
+        return trimmed.slice(0, 200);
       }
     }
     return '';
