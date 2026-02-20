@@ -55,6 +55,7 @@ import {
   ChevronsUpDown,
   Check,
   Search,
+  Download,
 } from 'lucide-react';
 
 interface Worktree {
@@ -495,10 +496,33 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
           </Popover>
         </div>
         {selectedProject && (
-          <Button variant="outline" size="sm" onClick={loadProjectData} disabled={loading}>
-            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={async () => {
+              setLoading(true);
+              try {
+                const res = await fetch('/api/git/fetch', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ project: selectedProject }),
+                });
+                if (!res.ok) {
+                  const data = await res.json();
+                  console.error('Fetch failed:', data.error);
+                }
+                await loadProjectData();
+              } catch (err) {
+                console.error('Fetch error:', err);
+                setLoading(false);
+              }
+            }} disabled={loading}>
+              <Download className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              Fetch
+            </Button>
+            <Button variant="outline" size="sm" onClick={loadProjectData} disabled={loading}>
+              <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+          </div>
         )}
       </div>
 
