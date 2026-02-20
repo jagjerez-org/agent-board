@@ -2,6 +2,7 @@
 // POST /api/tasks - Create new task
 import { NextRequest, NextResponse } from 'next/server';
 import { listTasks, createTask, getTasksByStatus } from '@/lib/task-store';
+import { eventBus } from '@/lib/event-bus';
 import { TaskStatus, Priority } from '@/lib/types';
 
 export async function GET(request: NextRequest) {
@@ -10,12 +11,13 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status') as TaskStatus | null;
     const assignee = searchParams.get('assignee') || undefined;
     const priority = searchParams.get('priority') as Priority | null;
+    const project = searchParams.get('project') || undefined;
     const labels = searchParams.get('labels')?.split(',').filter(Boolean) || undefined;
     const groupBy = searchParams.get('groupBy');
 
     if (groupBy === 'status') {
-      // Return tasks grouped by status for kanban board
-      const tasksByStatus = await getTasksByStatus();
+      // Return tasks grouped by status for kanban board, with project filter
+      const tasksByStatus = await getTasksByStatus(project);
       return NextResponse.json(tasksByStatus);
     }
 
@@ -24,6 +26,7 @@ export async function GET(request: NextRequest) {
       status: status || undefined,
       assignee,
       priority: priority || undefined,
+      project,
       labels
     };
 
@@ -51,6 +54,7 @@ export async function POST(request: NextRequest) {
     }
 
     const task = await createTask(data);
+    eventBus.emit({ type: 'task:created', payload: task });
     return NextResponse.json(task, { status: 201 });
   } catch (error) {
     console.error('Error creating task:', error);

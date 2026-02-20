@@ -226,6 +226,7 @@ export async function rebuildIndex(): Promise<TaskIndex> {
         id: task.id,
         status: task.status,
         assignee: task.assignee,
+        project_id: task.project_id,
         priority: task.priority,
         updated_at: task.updated_at,
         title: task.title

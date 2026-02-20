@@ -1,6 +1,7 @@
 // POST /api/tasks/[id]/move - Move task to new status column
 import { NextRequest, NextResponse } from 'next/server';
 import { moveTask } from '@/lib/task-store';
+import { eventBus } from '@/lib/event-bus';
 import { TaskStatus } from '@/lib/types';
 
 interface Props {
@@ -28,6 +29,7 @@ export async function POST(request: NextRequest, { params }: Props) {
       );
     }
 
+    eventBus.emit({ type: 'task:moved', payload: task });
     return NextResponse.json(task);
   } catch (error) {
     console.error('Error moving task:', error);

@@ -9,6 +9,7 @@ export interface CreateTaskData {
   description?: string;
   priority?: Priority;
   assignee?: string;
+  project_id?: string;
   story_points?: number;
   due_date?: string;
   labels?: string[];
@@ -20,6 +21,7 @@ export interface UpdateTaskData {
   description?: string;
   priority?: Priority;
   assignee?: string;
+  project_id?: string;
   story_points?: number;
   due_date?: string;
   labels?: string[];
@@ -38,6 +40,7 @@ export async function createTask(data: CreateTaskData): Promise<Task> {
     status: 'backlog',
     priority: data.priority || 'medium',
     assignee: data.assignee,
+    project_id: data.project_id,
     story_points: data.story_points,
     due_date: data.due_date,
     labels: data.labels || [],
@@ -241,12 +244,13 @@ export async function listTasks(filters?: {
   status?: TaskStatus;
   assignee?: string;
   priority?: Priority;
+  project?: string;
   labels?: string[];
 }): Promise<Task[]> {
   const index = await storage.readIndex();
   let filteredTasks = index.tasks;
 
-  // Apply filters
+  // Apply filters at index level for better performance
   if (filters?.status) {
     filteredTasks = filteredTasks.filter(t => t.status === filters.status);
   }
@@ -256,14 +260,18 @@ export async function listTasks(filters?: {
   if (filters?.priority) {
     filteredTasks = filteredTasks.filter(t => t.priority === filters.priority);
   }
+  if (filters?.project) {
+    filteredTasks = filteredTasks.filter(t => t.project_id === filters.project);
+  }
 
-  // For label filtering, we need to load full tasks
+  // For label filtering, we need to load full tasks (project is now filtered at index level)
   if (filters?.labels && filters.labels.length > 0) {
     const fullTasks: Task[] = [];
     for (const taskSummary of filteredTasks) {
       const result = await storage.readTask(taskSummary.id);
       if (result) {
-        const hasAllLabels = filters.labels.every(label => 
+        // Apply labels filter
+        const hasAllLabels = filters.labels!.every(label => 
           result.task.labels?.includes(label)
         );
         if (hasAllLabels) {
@@ -287,8 +295,8 @@ export async function listTasks(filters?: {
 }
 
 // Get tasks by status (for kanban board)
-export async function getTasksByStatus(): Promise<Record<TaskStatus, Task[]>> {
-  const allTasks = await listTasks();
+export async function getTasksByStatus(projectFilter?: string): Promise<Record<TaskStatus, Task[]>> {
+  const allTasks = await listTasks(projectFilter ? { project: projectFilter } : undefined);
   
   const tasksByStatus: Record<TaskStatus, Task[]> = {
     backlog: [],

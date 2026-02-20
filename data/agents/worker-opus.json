@@ -1,0 +1,13 @@
+{
+  "id": "worker-opus",
+  "name": "Worker Opus",
+  "model": "anthropic/claude-opus-4-6",
+  "role": "heavy",
+  "capabilities": [
+    "coding",
+    "research",
+    "writing",
+    "analysis"
+  ],
+  "status": "idle"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "worker-light",
+  "name": "Worker Light",
+  "model": "anthropic/claude-sonnet-3.5",
+  "role": "light",
+  "capabilities": [
+    "quick-tasks",
+    "formatting",
+    "basic-queries"
+  ],
+  "status": "idle",
+  "parent_agent_id": "worker-opus"
+}

@@ -1,5 +1,5 @@
 import { Button } from '@/components/ui/button';
-import { Settings, Activity, Users } from 'lucide-react';
+import { Settings, Activity, Users, GitBranch, FolderOpen } from 'lucide-react';
 import Link from 'next/link';
 import { ActivityFeed } from '@/components/activity/activity-feed';
 
@@ -16,6 +16,12 @@ export default function ActivityPage() {
                 <Link href="/">Board</Link>
               </Button>
               <Button variant="ghost" size="sm" asChild>
+                <Link href="/projects">
+                  <FolderOpen className="w-4 h-4 mr-2" />
+                  Projects
+                </Link>
+              </Button>
+              <Button variant="ghost" size="sm" asChild>
                 <Link href="/agents">
                   <Users className="w-4 h-4 mr-2" />
                   Agents
@@ -25,6 +31,12 @@ export default function ActivityPage() {
                 <Link href="/activity" className="bg-accent text-accent-foreground">
                   <Activity className="w-4 h-4 mr-2" />
                   Activity
+                </Link>
+              </Button>
+              <Button variant="ghost" size="sm" asChild>
+                <Link href="/worktrees">
+                  <GitBranch className="w-4 h-4 mr-2" />
+                  Worktrees
                 </Link>
               </Button>
             </nav>

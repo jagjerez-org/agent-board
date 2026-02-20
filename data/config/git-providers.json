@@ -1,0 +1,18 @@
+{
+  "providers": [
+    {
+      "type": "github",
+      "name": "GitHub - Jarvis",
+      "cli": "gh",
+      "account": "Jarvis-Jagjerez",
+      "orgs": ["jagjerez-org", "hubdance"]
+    },
+    {
+      "type": "gitlab",
+      "name": "GitLab",
+      "cli": "~/.local/bin/glab",
+      "account": "jagjerez2015",
+      "orgs": ["educabrera1997", "AmericanLanguage-IT"]
+    }
+  ]
+}

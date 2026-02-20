@@ -3,6 +3,7 @@
 // DELETE /api/tasks/[id] - Delete task
 import { NextRequest, NextResponse } from 'next/server';
 import { getTask, updateTask, deleteTask } from '@/lib/task-store';
+import { eventBus } from '@/lib/event-bus';
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -44,6 +45,7 @@ export async function PATCH(request: NextRequest, { params }: Props) {
       );
     }
 
+    eventBus.emit({ type: 'task:updated', payload: updatedTask });
     return NextResponse.json(updatedTask);
   } catch (error) {
     console.error('Error updating task:', error);
@@ -66,6 +68,7 @@ export async function DELETE(request: NextRequest, { params }: Props) {
       );
     }
 
+    eventBus.emit({ type: 'task:deleted', payload: { id } });
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error deleting task:', error);

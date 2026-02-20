@@ -1,6 +1,7 @@
 // POST /api/tasks/[id]/assign - Assign task to agent
 import { NextRequest, NextResponse } from 'next/server';
 import { assignTask } from '@/lib/task-store';
+import { eventBus } from '@/lib/event-bus';
 import { assignAgentToTask } from '@/lib/agent-store';
 
 interface Props {
@@ -39,6 +40,7 @@ export async function POST(request: NextRequest, { params }: Props) {
       );
     }
 
+    eventBus.emit({ type: 'task:assigned', payload: { task, agent } });
     return NextResponse.json({ task, agent });
   } catch (error) {
     console.error('Error assigning task:', error);

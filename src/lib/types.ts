@@ -7,10 +7,13 @@ export interface Task {
   status: TaskStatus;
   priority: Priority;
   assignee?: string; // agent id
+  project_id?: string;
   story_points?: number;
   due_date?: string; // ISO date
-  pr_url?: string;
+  pr_url?: string; // kept for backward compatibility
   pr_status?: PRStatus;
+  branch?: string; // git branch name (primary association)
+  worktree_path?: string; // if this branch has an active worktree, its path
   parent_task_id?: string;
   labels?: string[];
   sort_order: number;
@@ -61,12 +64,27 @@ export interface ActivityEntry {
   created_at: string; // ISO date
 }
 
+export interface Project {
+  id: string;
+  name: string;
+  description?: string;
+  repo_url?: string;
+  repo_owner?: string;
+  repo_name?: string;
+  provider?: string;
+  is_private?: boolean;
+  local_path?: string; // local path where repo is cloned
+  created_at: string; // ISO date
+  updated_at: string; // ISO date
+}
+
 export interface BoardState {
   column_order?: TaskStatus[];
   filters?: {
     assignee?: string;
     priority?: Priority;
     labels?: string[];
+    project?: string;
   };
   view_preferences?: Record<string, unknown>;
 }
@@ -76,6 +94,7 @@ export interface TaskIndex {
     id: string;
     status: TaskStatus;
     assignee?: string;
+    project_id?: string;
     priority: Priority;
     updated_at: string;
     title: string;

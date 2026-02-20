@@ -1,0 +1,14 @@
+{
+  "id": "worker-code",
+  "name": "Worker Code",
+  "model": "anthropic/claude-sonnet-4-20250514",
+  "role": "code",
+  "capabilities": [
+    "coding",
+    "debugging",
+    "testing",
+    "deployment"
+  ],
+  "status": "idle",
+  "parent_agent_id": "worker-opus"
+}

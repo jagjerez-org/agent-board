@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { Button } from '@/components/ui/button';
+import { AgentSheet } from './agent-sheet';
 
 interface AgentHierarchy {
   roots: Agent[];
@@ -15,12 +16,47 @@ interface AgentHierarchy {
 
 export function AgentOrgChart() {
   const [hierarchy, setHierarchy] = useState<AgentHierarchy | null>(null);
+  const [allAgents, setAllAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   useEffect(() => {
     loadAgents();
+    // Poll live status every 10s
+    const interval = setInterval(loadLiveStatus, 10000);
+    loadLiveStatus();
+    return () => clearInterval(interval);
   }, []);
+
+  const [liveStatuses, setLiveStatuses] = useState<Record<string, string>>({});
+  interface LiveSubagent {
+    id: string;
+    label: string;
+    model?: string;
+    task?: string;
+    status: 'running' | 'done';
+    updatedAt?: number;
+    totalTokens?: number;
+    parentAgent: string;
+  }
+  const [liveSubagents, setLiveSubagents] = useState<LiveSubagent[]>([]);
+
+  const loadLiveStatus = async () => {
+    try {
+      const res = await fetch('/api/agents/live');
+      const data = await res.json();
+      const map: Record<string, string> = {};
+      const subs: LiveSubagent[] = [];
+      for (const a of data.agents || []) {
+        map[a.id] = a.status;
+        if (a.activeSubagents) subs.push(...a.activeSubagents);
+      }
+      setLiveStatuses(map);
+      setLiveSubagents(subs);
+    } catch { /* ignore */ }
+  };
 
   const loadAgents = async () => {
     try {
@@ -32,6 +68,12 @@ export function AgentOrgChart() {
       }
       const data = await response.json();
       setHierarchy(data);
+      // Flatten for agent list
+      const flat: Agent[] = [...data.roots];
+      for (const children of Object.values(data.children) as Agent[][]) {
+        flat.push(...children);
+      }
+      setAllAgents(flat);
     } catch (error) {
       console.error('Error loading agents:', error);
       setError('Failed to load agents. Please try again.');
@@ -107,9 +149,14 @@ export function AgentOrgChart() {
     );
   }
 
+  const openAgent = (id: string) => {
+    setSelectedAgentId(id);
+    setSheetOpen(true);
+  };
+
   const renderAgent = (agent: Agent, level = 0) => (
     <div key={agent.id} className="mb-4" style={{ marginLeft: level * 24 }}>
-      <Card className="p-4 hover:shadow-md transition-shadow">
+      <Card className="p-4 hover:shadow-md transition-shadow cursor-pointer" onClick={() => openAgent(agent.id)}>
         <div className="flex items-start justify-between">
           <div className="flex items-center space-x-3">
             <div className="relative">
@@ -119,7 +166,7 @@ export function AgentOrgChart() {
                 </AvatarFallback>
               </Avatar>
               <div 
-                className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-background ${getStatusColor(agent.status)}`}
+                className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-background ${getStatusColor(liveStatuses[agent.id] || agent.status)}`}
               />
             </div>
             
@@ -130,11 +177,11 @@ export function AgentOrgChart() {
                   {agent.role || 'general'}
                 </Badge>
                 <Badge 
-                  variant={agent.status === 'idle' ? 'default' : 
-                          agent.status === 'busy' ? 'secondary' : 'outline'}
+                  variant={(liveStatuses[agent.id] || agent.status) === 'idle' ? 'default' : 
+                          (liveStatuses[agent.id] || agent.status) === 'busy' ? 'secondary' : 'outline'}
                   className="text-xs"
                 >
-                  {agent.status}
+                  {liveStatuses[agent.id] || agent.status}
                 </Badge>
               </div>
               {agent.model && (
@@ -173,6 +220,46 @@ export function AgentOrgChart() {
       {hierarchy.children[agent.id]?.map(childAgent => 
         renderAgent(childAgent, level + 1)
       )}
+
+      {/* Render live subagent sessions */}
+      {liveSubagents
+        .filter(s => s.parentAgent === agent.id)
+        .map(sub => (
+          <div key={sub.id} className="mb-2" style={{ marginLeft: (level + 1) * 24 }}>
+            <Card className={`p-3 border-dashed ${
+              sub.status === 'running' ? 'border-yellow-500/50 bg-yellow-500/5' : 'border-muted opacity-60'
+            }`}>
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <Avatar className="h-8 w-8">
+                    <AvatarFallback className="bg-primary/5 text-xs">SA</AvatarFallback>
+                  </Avatar>
+                  <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-background ${
+                    sub.status === 'running' ? 'bg-yellow-500 animate-pulse' : 'bg-gray-500'
+                  }`} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">{sub.label}</span>
+                    <Badge variant={sub.status === 'running' ? 'secondary' : 'outline'} className="text-xs">
+                      {sub.status}
+                    </Badge>
+                  </div>
+                  {sub.model && (
+                    <p className="text-xs text-muted-foreground">{sub.model}</p>
+                  )}
+                </div>
+                <div className="text-right">
+                  {sub.totalTokens && (
+                    <span className="text-xs text-muted-foreground">
+                      {(sub.totalTokens / 1000).toFixed(1)}k tok
+                    </span>
+                  )}
+                </div>
+              </div>
+            </Card>
+          </div>
+        ))}
     </div>
   );
 
@@ -190,6 +277,14 @@ export function AgentOrgChart() {
       <div className="max-h-[600px] overflow-y-auto">
         {hierarchy.roots.map(agent => renderAgent(agent))}
       </div>
+
+      <AgentSheet
+        agentId={selectedAgentId}
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        onUpdated={loadAgents}
+        agents={allAgents}
+      />
     </div>
   );
 }

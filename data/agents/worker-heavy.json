@@ -1,0 +1,13 @@
+{
+  "id": "worker-heavy",
+  "name": "Worker Heavy",
+  "model": "anthropic/claude-sonnet-4-20250514",
+  "role": "heavy",
+  "capabilities": [
+    "coding",
+    "research",
+    "analysis"
+  ],
+  "status": "idle",
+  "parent_agent_id": "worker-opus"
+}
