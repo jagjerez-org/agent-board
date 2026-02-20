@@ -682,5 +682,14 @@
     "pid": 182141,
     "status": "running",
     "startedAt": "2026-02-20T16:13:41.366Z"
+  },
+  {
+    "id": "1771605234590-m2nrf6dal",
+    "project": "hubdance/kadens",
+    "branch": "feat/review_kadens_jgodoy",
+    "command": "pnpm dev -- --hostname 0.0.0.0",
+    "pid": 225858,
+    "status": "running",
+    "startedAt": "2026-02-20T16:33:54.590Z"
   }
 ]

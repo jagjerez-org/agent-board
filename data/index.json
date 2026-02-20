@@ -10,12 +10,13 @@
     },
     {
       "id": "94e3815a-ef62-4779-a395-b546dbc47b58",
-      "status": "backlog",
+      "status": "refinement",
+      "assignee": "worker-heavy",
       "project_id": "hubdance-kadens",
       "priority": "critical",
-      "updated_at": "2026-02-20T16:24:46.582Z",
+      "updated_at": "2026-02-20T16:34:35.945Z",
       "title": "Repair imperson feature"
     }
   ],
-  "last_updated": "2026-02-20T16:24:46.586Z"
+  "last_updated": "2026-02-20T16:34:35.946Z"
 }

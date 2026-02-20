@@ -4,6 +4,7 @@ export interface Task {
   id: string;
   title: string;
   description?: string;
+  refinement?: string;
   status: TaskStatus;
   priority: Priority;
   assignee?: string; // agent id

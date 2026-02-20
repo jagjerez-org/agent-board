@@ -42,6 +42,14 @@ import {
 } from '@/components/ui/dialog';
 import { Trash2, GitBranch, Check, ChevronsUpDown, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+
+function RefinementMarkdown({ content }: { content: string }) {
+  return (
+    <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+  );
+}
 
 const STATUS_LABELS: Record<TaskStatus, string> = {
   backlog: '📋 Backlog',
@@ -108,6 +116,9 @@ export function TaskSheet({ taskId, mode, open, onOpenChange, onSaved, defaultSt
   const [comments, setComments] = useState<{ id: string; author: string; text: string; created_at: string }[]>([]);
   const [newComment, setNewComment] = useState('');
   const [addingComment, setAddingComment] = useState(false);
+  const [refinement, setRefinement] = useState('');
+  const [refining, setRefining] = useState(false);
+  const [refineFeedback, setRefineFeedback] = useState('');
 
   // Load projects and agents
   useEffect(() => {
@@ -177,6 +188,7 @@ export function TaskSheet({ taskId, mode, open, onOpenChange, onSaved, defaultSt
           const t = data.task;
           setTitle(t.title);
           setDescription(t.description || '');
+          setRefinement((t as any).refinement || '');
           setStatus(t.status);
           setPriority(t.priority);
           setAssignee(t.assignee || '');
@@ -340,6 +352,102 @@ export function TaskSheet({ taskId, mode, open, onOpenChange, onSaved, defaultSt
               <label className="text-sm font-medium mb-1 block">Description</label>
               <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe the task..." rows={4} />
             </div>
+
+            {/* Refinement Section */}
+            {(status === 'refinement' || refinement) && mode === 'edit' && (
+              <div className="border rounded-lg p-4 bg-muted/30">
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-sm font-bold flex items-center gap-2">
+                    🔍 Refinement
+                    {refining && <span className="text-xs text-muted-foreground animate-pulse">Processing...</span>}
+                  </label>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={refining || !assignee}
+                    onClick={async () => {
+                      setRefining(true);
+                      try {
+                        const res = await fetch(`/api/tasks/${taskId}/refine`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ feedback: refineFeedback }),
+                        });
+                        const data = await res.json();
+                        if (data.status === 'started' || data.status === 'queued') {
+                          setRefineFeedback('');
+                          // Poll for result
+                          const poll = setInterval(async () => {
+                            const r = await fetch(`/api/tasks/${taskId}`);
+                            const d = await r.json();
+                            const ref = (d.task as any)?.refinement || '';
+                            if (ref && !ref.includes('⏳')) {
+                              setRefinement(ref);
+                              setRefining(false);
+                              clearInterval(poll);
+                            }
+                          }, 3000);
+                          // Stop polling after 2 min
+                          setTimeout(() => { clearInterval(poll); setRefining(false); }, 120000);
+                        }
+                      } catch { setRefining(false); }
+                    }}
+                  >
+                    {refinement ? '🔄 Re-refine' : '✨ Refine'}
+                  </Button>
+                </div>
+                
+                {refinement ? (
+                  <div className="prose prose-sm prose-invert max-w-none mb-3 [&_h3]:text-base [&_h3]:font-semibold [&_h3]:mt-3 [&_h3]:mb-1 [&_ul]:my-1 [&_li]:my-0 [&_p]:my-1">
+                    <RefinementMarkdown content={refinement} />
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground mb-3">
+                    {assignee ? 'Click "Refine" to have the assigned agent analyze and refine this task.' : 'Assign an agent first to enable refinement.'}
+                  </p>
+                )}
+                
+                <div className="flex gap-2">
+                  <Textarea
+                    value={refineFeedback}
+                    onChange={(e) => setRefineFeedback(e.target.value)}
+                    placeholder="Give feedback to adjust the refinement..."
+                    rows={2}
+                    className="flex-1"
+                  />
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={!refineFeedback.trim() || refining || !assignee}
+                    className="self-end"
+                    onClick={async () => {
+                      setRefining(true);
+                      try {
+                        await fetch(`/api/tasks/${taskId}/refine`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ feedback: refineFeedback }),
+                        });
+                        setRefineFeedback('');
+                        const poll = setInterval(async () => {
+                          const r = await fetch(`/api/tasks/${taskId}`);
+                          const d = await r.json();
+                          const ref = (d.task as any)?.refinement || '';
+                          if (ref && !ref.includes('⏳')) {
+                            setRefinement(ref);
+                            setRefining(false);
+                            clearInterval(poll);
+                          }
+                        }, 3000);
+                        setTimeout(() => { clearInterval(poll); setRefining(false); }, 120000);
+                      } catch { setRefining(false); }
+                    }}
+                  >
+                    Send
+                  </Button>
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-4">
               <div>

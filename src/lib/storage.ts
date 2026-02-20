@@ -22,7 +22,7 @@ export async function ensureDataDirs(): Promise<void> {
 export async function writeTask(task: Task, comments: Comment[] = []): Promise<void> {
   await ensureDataDirs();
   
-  const { description, ...taskData } = task;
+  const { description, refinement, ...taskData } = task as Task & { refinement?: string };
   
   // Filter out undefined values for clean YAML
   const frontmatter = Object.fromEntries(
@@ -30,6 +30,11 @@ export async function writeTask(task: Task, comments: Comment[] = []): Promise<v
   );
   
   let content = description || '';
+  
+  // Add refinement section if present
+  if (refinement) {
+    content += '\n\n## Refinement\n\n' + refinement;
+  }
   
   // Add comments section if there are any
   if (comments.length > 0) {
@@ -52,10 +57,16 @@ export async function readTask(id: string): Promise<{ task: Task; comments: Comm
     const fileContent = await fs.readFile(filePath, 'utf8');
     const parsed = matter(fileContent);
     
+    // Split content into description, refinement, and comments
+    const rawContent = parsed.content;
+    const refinementMatch = rawContent.match(/\n## Refinement\n\n([\s\S]*?)(?=\n## Comments|$)/);
+    const descriptionPart = rawContent.split('\n## Refinement')[0].split('\n## Comments')[0].trim();
+    
     const task: Task = {
       ...parsed.data as Omit<Task, 'description'>,
-      description: parsed.content.split('\n## Comments')[0].trim() || undefined
-    };
+      description: descriptionPart || undefined,
+      refinement: refinementMatch ? refinementMatch[1].trim() : undefined,
+    } as Task;
     
     // Parse comments from content
     const comments: Comment[] = [];
