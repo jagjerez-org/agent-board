@@ -410,14 +410,21 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
                   const p = projects.find(pr => pr.id === selectedProject);
                   return p ? `${p.name} (${p.repo_owner || ''})` : selectedProject;
                 })() : "Select a project..."}
-                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                {loading ? <Loader2 className="ml-2 h-4 w-4 shrink-0 animate-spin" /> : <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-[400px] p-0">
               <Command shouldFilter={false}>
                 <CommandInput placeholder="Search projects..." value={projectSearch} onValueChange={setProjectSearch} />
                 <CommandList>
-                  <CommandEmpty>No projects found.</CommandEmpty>
+                  <CommandEmpty>
+                    {projects.length === 0 ? (
+                      <div className="flex items-center justify-center gap-2 py-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Loading projects...
+                      </div>
+                    ) : 'No projects match your search.'}
+                  </CommandEmpty>
                   <CommandGroup>
                     {projects
                       .filter(p => !projectSearch || 
