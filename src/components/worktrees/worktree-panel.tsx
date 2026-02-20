@@ -722,15 +722,32 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
               ) : (
                 <div className="space-y-2">
                   {branches.map((b) => (
-                    <div key={b.name} className="flex items-center justify-between py-2 px-3 rounded border">
+                    <div key={b.name} className="flex items-center justify-between py-2 px-3 rounded border hover:bg-muted/50 transition-colors">
                       <div className="flex items-center gap-2">
                         <GitBranch className="w-4 h-4 text-muted-foreground" />
-                        <span>{b.name}</span>
+                        <span className="font-medium">{b.name}</span>
                         {b.isCurrent && <Badge variant="default">Current</Badge>}
                         {b.isLocal && b.isRemote && <Badge variant="default" className="text-[10px] px-1 py-0">local + remote</Badge>}
                         {b.isLocal && !b.isRemote && <Badge variant="secondary" className="text-[10px] px-1 py-0">local</Badge>}
                         {!b.isLocal && b.isRemote && <Badge variant="outline" className="text-[10px] px-1 py-0">remote</Badge>}
                         {b.hasWorktree && <Badge variant="secondary">Has Worktree</Badge>}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {!b.hasWorktree && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-xs"
+                            onClick={() => {
+                              setCreateNewBranch(false);
+                              setSelectedBranch(b.name);
+                              setCreateDialogOpen(true);
+                            }}
+                          >
+                            <Plus className="w-3 h-3 mr-1" />
+                            Worktree
+                          </Button>
+                        )}
                       </div>
                     </div>
                   ))}
