@@ -386,3 +386,41 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+// DELETE /api/git/worktrees/logs - Kill running process for a branch
+export async function DELETE(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { project: rawProject, branch } = body;
+
+    if (!rawProject || !branch) {
+      return NextResponse.json({ error: 'project and branch required' }, { status: 400 });
+    }
+
+    const project = await resolveProjectId(rawProject);
+    const key = logService['getProcessKey'](project, branch);
+    const processData = logService['processes'].get(key);
+
+    if (!processData?.process?.pid) {
+      return NextResponse.json({ error: 'No running process found' }, { status: 404 });
+    }
+
+    try {
+      process.kill(-processData.process.pid, 'SIGKILL');
+    } catch {
+      try { process.kill(processData.process.pid, 'SIGKILL'); } catch { /* already dead */ }
+    }
+
+    // Notify subscribers
+    const encoder = new TextEncoder();
+    processData.subscribers.forEach((controller: ReadableStreamDefaultController) => {
+      try {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'system', message: 'Process killed by user', timestamp: new Date().toISOString() })}\n\n`));
+      } catch { /* ignore */ }
+    });
+
+    return NextResponse.json({ success: true, message: 'Process killed' });
+  } catch (error) {
+    console.error('Error in DELETE /api/git/worktrees/logs:', error);
+    return NextResponse.json({ error: 'Failed to kill process' }, { status: 500 });
+  }
+}

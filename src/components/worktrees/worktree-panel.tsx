@@ -368,6 +368,20 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
     finally { setRunningCommands(prev => { const n = new Set(prev); n.delete(key); return n; }); }
   };
 
+  const killProcess = async (branch: string) => {
+    try {
+      const res = await fetch('/api/git/worktrees/logs', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project: selectedProject, branch }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || 'Failed to kill process');
+      }
+    } catch { alert('Failed to kill process'); }
+  };
+
   const createWorktree = async () => {
     if (!selectedProject || (!newBranch && !selectedBranch)) return;
     const branch = createNewBranch ? newBranch : selectedBranch;
@@ -760,6 +774,9 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
                                 />
                                 <Button size="sm" className="h-8" onClick={() => runCommand(wt.branch)} disabled={!commandInputs.get(wt.branch)?.trim()}>
                                   <Play className="w-3 h-3" />
+                                </Button>
+                                <Button size="sm" variant="destructive" className="h-8" onClick={() => killProcess(wt.branch)} title="Kill running process">
+                                  <Square className="w-3 h-3" />
                                 </Button>
                               </div>
                               
