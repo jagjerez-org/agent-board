@@ -64,6 +64,36 @@ jobs:
           path: ${{ env.SKILL_ZIP }}
           retention-days: 30
 
+  release:
+    needs: ci
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version
+        id: ver
+        run: echo "VERSION=$(node -p 'require("./package.json").version')" >> "$GITHUB_OUTPUT"
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.ver.outputs.VERSION }}
+          name: v${{ steps.ver.outputs.VERSION }}
+          generate_release_notes: true
+          make_latest: true
+          files: |
+            artifacts/agent-board-v${{ steps.ver.outputs.VERSION }}/*.zip
+            artifacts/agent-board-skill-v${{ steps.ver.outputs.VERSION }}/*.zip
+
   publish-clawhub:
     needs: ci
     # Disabled: ClawHub requires GitHub account > 7 days old. Re-enable after ~2026-02-24.
