@@ -36,8 +36,6 @@ import {
   Play,
   Square,
   ExternalLink,
-  ChevronDown,
-  ChevronRight,
   Copy,
   Loader2,
 } from 'lucide-react';

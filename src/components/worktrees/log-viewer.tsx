@@ -26,7 +26,12 @@ import {
   Loader2
 } from 'lucide-react';
 import { logService, LogEntry, formatLogEntry, getLogTypeColor, stripAnsiCodes } from '@/lib/log-service';
-import { Worktree } from '@/lib/worktree-service';
+interface Worktree {
+  path: string;
+  branch: string;
+  commit: string;
+  isMain: boolean;
+}
 
 interface LogViewerProps {
   projectId: string;

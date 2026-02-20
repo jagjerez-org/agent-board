@@ -34,7 +34,12 @@ import {
   AlertCircle,
   Loader2
 } from 'lucide-react';
-import { Worktree } from '@/lib/worktree-service';
+interface Worktree {
+  path: string;
+  branch: string;
+  commit: string;
+  isMain: boolean;
+}
 
 interface PreviewServer {
   branch: string;

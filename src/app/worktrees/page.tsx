@@ -6,7 +6,12 @@ import { Button } from '@/components/ui/button';
 import { FolderOpen, Users, Activity, GitBranch } from 'lucide-react';
 import { WorktreePanel } from '@/components/worktrees/worktree-panel';
 import { Project } from '@/lib/types';
-import { Worktree } from '@/lib/worktree-service';
+interface Worktree {
+  path: string;
+  branch: string;
+  commit: string;
+  isMain: boolean;
+}
 
 export default function WorktreesPage() {
   const [selectedProject, setSelectedProject] = useState<string>('');
