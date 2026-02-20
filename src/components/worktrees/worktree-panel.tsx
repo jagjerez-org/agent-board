@@ -24,6 +24,20 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
 import { 
   GitBranch, 
   Plus, 
@@ -38,6 +52,9 @@ import {
   ExternalLink,
   Copy,
   Loader2,
+  ChevronsUpDown,
+  Check,
+  Search,
 } from 'lucide-react';
 
 interface Worktree {
@@ -114,6 +131,9 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
   const [selectedBranch, setSelectedBranch] = useState('');
   const [baseBranch, setBaseBranch] = useState('main');
   const [branchSearch, setBranchSearch] = useState('');
+  const [projectSearch, setProjectSearch] = useState('');
+  const [projectOpen, setProjectOpen] = useState(false);
+  const [loadingBranches, setLoadingBranches] = useState(false);
 
   // Resolve project ID to repo-style path
   const getRepoProjectId = useCallback((pid: string) => {
@@ -146,6 +166,7 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
   const loadProjectData = async () => {
     if (!selectedProject) return;
     setLoading(true);
+    setLoadingBranches(true);
     try {
       const repoId = getRepoProjectId(selectedProject);
       const [wtRes, brRes, pvRes] = await Promise.all([
@@ -180,6 +201,7 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
       setBranches([]);
     } finally {
       setLoading(false);
+      setLoadingBranches(false);
     }
   };
 
@@ -376,18 +398,45 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
       {/* Project selector */}
       <div className="flex items-center gap-4">
         <div className="flex-1">
-          <Select value={selectedProject} onValueChange={setSelectedProject}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select a project..." />
-            </SelectTrigger>
-            <SelectContent>
-              {projects.map((project) => (
-                <SelectItem key={project.id} value={project.id}>
-                  {project.name} {project.repo_owner && `(${project.repo_owner})`}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Popover open={projectOpen} onOpenChange={setProjectOpen}>
+            <PopoverTrigger asChild>
+              <Button variant="outline" role="combobox" aria-expanded={projectOpen} className="w-full justify-between">
+                {selectedProject ? (() => {
+                  const p = projects.find(pr => pr.id === selectedProject);
+                  return p ? `${p.name} (${p.repo_owner || ''})` : selectedProject;
+                })() : "Select a project..."}
+                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[400px] p-0">
+              <Command shouldFilter={false}>
+                <CommandInput placeholder="Search projects..." value={projectSearch} onValueChange={setProjectSearch} />
+                <CommandList>
+                  <CommandEmpty>No projects found.</CommandEmpty>
+                  <CommandGroup>
+                    {projects
+                      .filter(p => !projectSearch || 
+                        p.name.toLowerCase().includes(projectSearch.toLowerCase()) ||
+                        (p.repo_owner || '').toLowerCase().includes(projectSearch.toLowerCase()))
+                      .map((project) => (
+                        <CommandItem
+                          key={project.id}
+                          value={project.id}
+                          onSelect={() => {
+                            setSelectedProject(project.id === selectedProject ? '' : project.id);
+                            setProjectOpen(false);
+                            setProjectSearch('');
+                          }}
+                        >
+                          <Check className={cn("mr-2 h-4 w-4", selectedProject === project.id ? "opacity-100" : "opacity-0")} />
+                          {project.name} {project.repo_owner && `(${project.repo_owner})`}
+                        </CommandItem>
+                      ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
         </div>
         {selectedProject && (
           <Button variant="outline" size="sm" onClick={loadProjectData} disabled={loading}>
@@ -729,7 +778,12 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
               />
             </CardHeader>
             <CardContent>
-              {branches.length === 0 ? (
+              {loadingBranches ? (
+                <div className="flex items-center justify-center py-8 text-muted-foreground gap-2">
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>Loading branches...</span>
+                </div>
+              ) : branches.length === 0 ? (
                 <div className="text-center py-4 text-muted-foreground">No branches found</div>
               ) : (
                 <div className="space-y-2">
