@@ -138,7 +138,7 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
   };
 
   const addConsoleTab = (branch: string) => {
-    const id = `console-${nextConsoleId.current++}`;
+    const id = `console_${nextConsoleId.current++}`;
     const tabs = getOrCreateConsoles(branch);
     const newTab: ConsoleTab = { id, branch, label: `Console ${tabs.length + 1}` };
     setConsoleTabs(prev => {
