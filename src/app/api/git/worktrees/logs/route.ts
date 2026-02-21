@@ -236,7 +236,7 @@ export async function POST(request: NextRequest) {
         `${homeDir}/.local/bin`,
         '/usr/local/bin',
       ].join(':');
-      sendTmuxKeys(sessionName, `export PATH="${extraPaths}:$PATH" && clear`);
+      sendTmuxKeys(sessionName, `export PATH="${extraPaths}:$PATH" && unset PORT && clear`);
       await new Promise(r => setTimeout(r, 300));
     }
 
