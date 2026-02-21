@@ -437,7 +437,7 @@ function EditorPageContent() {
 
   return (
     <>
-      <div className="flex overflow-hidden bg-background h-screen">
+      <div className="flex overflow-hidden bg-background h-full">
         {/* Sidebar */}
         <div className="border-r bg-card flex flex-col overflow-hidden" style={{ width: sidebarWidth, minWidth: sidebarWidth }}>
           {/* Sidebar tabs */}
@@ -465,7 +465,7 @@ function EditorPageContent() {
                   <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="Refresh" onClick={loadTree}><RefreshCw className="w-4 h-4" /></Button>
                 </div>
               </div>
-              <div className="flex-1 overflow-y-auto">
+              <div className="flex-1 overflow-y-auto scrollbar-thin">
                 <div className="p-2">
                   {loading ? (
                     <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin" /></div>
@@ -480,7 +480,7 @@ function EditorPageContent() {
               </div>
             </>
           ) : (
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto scrollbar-thin">
               <GitChangesPanel projectPath={projectPath} onFileClick={handleGitFileClick} />
             </div>
           )}

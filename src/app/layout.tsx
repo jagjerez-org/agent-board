@@ -34,7 +34,7 @@ export default function RootLayout({
           <AuthGuard>
             <div className="flex flex-col h-screen">
               <TopNav />
-              <div className="flex-1 overflow-auto">
+              <div className="flex-1 overflow-hidden">
                 {children}
               </div>
             </div>
