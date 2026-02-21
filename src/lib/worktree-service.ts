@@ -214,6 +214,63 @@ export async function getRepoPath(projectId: string): Promise<string | null> {
       // Project file doesn't exist, this might be a direct project ID
     }
     
+    // Try to find project by scanning project JSON files + repos-cache.json
+    try {
+      // Collect all known projects from individual files and repos-cache
+      const allProjects: Array<{ data: Record<string, string>; file?: string }> = [];
+      
+      // Individual project files
+      const entries = await fs.readdir(PROJECTS_DIR).catch(() => [] as string[]);
+      for (const entry of entries) {
+        if (!entry.endsWith('.json') || entry === 'repos-cache.json') continue;
+        try {
+          const content = await fs.readFile(path.join(PROJECTS_DIR, entry), 'utf8');
+          allProjects.push({ data: JSON.parse(content), file: path.join(PROJECTS_DIR, entry) });
+        } catch { /* skip */ }
+      }
+      
+      // Repos cache (GitHub/GitLab fetched projects)
+      const cacheFile = path.join(PROJECTS_DIR, '..', 'repos-cache.json');
+      try {
+        const cacheContent = await fs.readFile(cacheFile, 'utf8');
+        const cache = JSON.parse(cacheContent);
+        if (cache.repos) {
+          for (const repo of cache.repos) {
+            allProjects.push({ data: repo });
+          }
+        }
+      } catch { /* no cache */ }
+      
+      for (const { data: proj, file } of allProjects) {
+        if (proj.id === projectId || `${proj.repo_owner}-${proj.repo_name}` === projectId || proj.name === projectId) {
+            if (proj.local_path) {
+              try { await fs.access(path.join(proj.local_path, '.git')); return proj.local_path; } catch { /* continue */ }
+            }
+            if (proj.repo_url) {
+              const repoSlug = proj.repo_url.split('/').pop()?.replace('.git', '') || '';
+              const potentialPaths = [`/tmp/${repoSlug}`, `/home/${process.env.USER}/${repoSlug}`, `/home/${process.env.USER}/.openclaw/workspace/${repoSlug}`];
+              for (const p of potentialPaths) {
+                try {
+                  await fs.access(path.join(p, '.git'));
+                  // Save local_path for future lookups
+                  if (file) { proj.local_path = p; await fs.writeFile(file, JSON.stringify(proj, null, 2)); }
+                  return p;
+                } catch { /* continue */ }
+              }
+              // Repo not cloned — auto-clone to /tmp
+              const clonePath = `/tmp/${repoSlug}`;
+              try {
+                await execAsync(`git clone "${proj.repo_url}" "${clonePath}"`, { timeout: 120000 });
+                if (file) { proj.local_path = clonePath; await fs.writeFile(file, JSON.stringify(proj, null, 2)); }
+                return clonePath;
+              } catch (cloneErr) {
+                console.error('Auto-clone failed:', cloneErr);
+              }
+            }
+          }
+      }
+    } catch { /* directory doesn't exist */ }
+
     // Try direct paths based on project ID
     const safeName = projectId.split('/').pop()?.toLowerCase().replace(/\s+/g, '-') || projectId;
     const directPaths = [
