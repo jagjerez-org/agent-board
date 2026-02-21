@@ -476,14 +476,16 @@ function EditorPageContent() {
 
   const handleEditorMount = (editor: any, monaco: Monaco) => {
     editorRef.current = editor;
-    monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({ noSemanticValidation: false, noSyntaxValidation: false });
+    // Disable semantic validation (imports, types) since Monaco can't resolve node_modules
+    // Keep syntax validation for catching typos
+    monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({ noSemanticValidation: true, noSyntaxValidation: false });
     monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
       target: monaco.languages.typescript.ScriptTarget.ESNext, module: monaco.languages.typescript.ModuleKind.ESNext,
       moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
       allowNonTsExtensions: true, jsx: monaco.languages.typescript.JsxEmit.ReactJSX,
-      allowJs: true, checkJs: true, strict: true, esModuleInterop: true, skipLibCheck: true,
+      allowJs: true, checkJs: false, strict: false, esModuleInterop: true, skipLibCheck: true,
     });
-    monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({ noSemanticValidation: false, noSyntaxValidation: false });
+    monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({ noSemanticValidation: true, noSyntaxValidation: false });
     editor.focus();
   };
 
