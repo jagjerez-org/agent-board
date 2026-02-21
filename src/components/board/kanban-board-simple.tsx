@@ -6,7 +6,7 @@ import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { useBoardEvents, BoardEvent } from '@/hooks/use-board-events';
 import { TaskSheet } from './task-sheet';
 import { Button } from '@/components/ui/button';
-import { Plus, Settings, Eye, EyeOff } from 'lucide-react';
+import { Plus, Eye } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -84,20 +84,19 @@ export function KanbanBoard({ projectId, onCreateRef }: KanbanBoardProps = {}) {
   const getStorageKey = (projectId?: string) => 
     `board-visible-columns${projectId ? `-${projectId}` : ''}`;
 
-  const loadVisibleColumns = useCallback(() => {
+  const loadVisibleColumns = useCallback((): TaskStatus[] => {
     try {
       const stored = localStorage.getItem(getStorageKey(projectId));
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed)) {
-          setVisibleColumns(parsed.filter(col => TASK_STATUSES.includes(col)));
-          return;
+          return parsed.filter(col => TASK_STATUSES.includes(col));
         }
       }
     } catch (error) {
       console.warn('Failed to load column visibility preferences:', error);
     }
-    setVisibleColumns(DEFAULT_VISIBLE_COLUMNS);
+    return DEFAULT_VISIBLE_COLUMNS;
   }, [projectId]);
 
   const saveVisibleColumns = useCallback((columns: TaskStatus[]) => {
@@ -124,8 +123,12 @@ export function KanbanBoard({ projectId, onCreateRef }: KanbanBoardProps = {}) {
 
   useEffect(() => { 
     loadTasks();
-    loadVisibleColumns();
-  }, [loadTasks, loadVisibleColumns]);
+  }, [loadTasks]);
+
+  // Load visible columns on mount and project change
+  useEffect(() => {
+    setVisibleColumns(loadVisibleColumns());
+  }, [loadVisibleColumns]);
 
   // Poll execution status for in_progress tasks
   useEffect(() => {
@@ -156,7 +159,7 @@ export function KanbanBoard({ projectId, onCreateRef }: KanbanBoardProps = {}) {
     checkExecutions();
     const interval = setInterval(checkExecutions, 10000);
     return () => clearInterval(interval);
-  }, [tasksByStatus]);
+  }, [tasksByStatus, loadTasks]);
 
   const handleEvent = useCallback((event: BoardEvent) => {
     if (event.type === 'connected') { setConnected(true); return; }
