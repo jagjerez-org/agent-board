@@ -437,7 +437,7 @@ function EditorPageContent() {
 
   return (
     <>
-      <div className="flex overflow-hidden bg-background h-full">
+      <div className="flex overflow-hidden bg-background" style={{ height: 'calc(100vh - 3rem)' }}>
         {/* Sidebar */}
         <div className="border-r bg-card flex flex-col overflow-hidden" style={{ width: sidebarWidth, minWidth: sidebarWidth }}>
           {/* Sidebar tabs */}
