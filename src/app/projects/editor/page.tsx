@@ -474,11 +474,17 @@ function EditorPageContent() {
     const monaco = monacoRef.current;
     
     // Register this file itself so other files can reference it
-    // Monaco path prop uses the raw path as URI
     const fileUri = filePath;
     if (!loadedTypesRef.current.has(fileUri)) {
-      monaco.languages.typescript.typescriptDefaults.addExtraLib(content, fileUri);
-      monaco.languages.typescript.javascriptDefaults.addExtraLib(content, fileUri);
+      // Create a real model so ctrl+click "go to definition" works
+      const uri = monaco.Uri.file(filePath);
+      if (!monaco.editor.getModel(uri)) {
+        const lang = filePath.endsWith('.tsx') ? 'typescriptreact' : filePath.endsWith('.ts') ? 'typescript' : filePath.endsWith('.jsx') ? 'javascriptreact' : 'javascript';
+        monaco.editor.createModel(content, lang, uri);
+      }
+      // Also add as extraLib for type resolution
+      monaco.languages.typescript.typescriptDefaults.addExtraLib(content, `file://${filePath}`);
+      monaco.languages.typescript.javascriptDefaults.addExtraLib(content, `file://${filePath}`);
       loadedTypesRef.current.add(fileUri);
     }
 
@@ -545,8 +551,14 @@ function EditorPageContent() {
             if (r.ok) {
               const data = await r.json();
               if (data.content) {
-                monaco.languages.typescript.typescriptDefaults.addExtraLib(data.content, tryUri);
-                monaco.languages.typescript.javascriptDefaults.addExtraLib(data.content, tryUri);
+                // Create model for go-to-definition support
+                const modelUri = monaco.Uri.file(tryPath);
+                if (!monaco.editor.getModel(modelUri)) {
+                  const lang = tryPath.endsWith('.tsx') ? 'typescriptreact' : tryPath.endsWith('.ts') ? 'typescript' : tryPath.endsWith('.jsx') ? 'javascriptreact' : 'javascript';
+                  monaco.editor.createModel(data.content, lang, modelUri);
+                }
+                monaco.languages.typescript.typescriptDefaults.addExtraLib(data.content, `file://${tryPath}`);
+                monaco.languages.typescript.javascriptDefaults.addExtraLib(data.content, `file://${tryPath}`);
                 loadedTypesRef.current.add(tryUri);
                 // Recursively load this file's imports too
                 if (data.content.includes('import') || data.content.includes('from')) {
@@ -617,6 +629,7 @@ function EditorPageContent() {
       moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
       allowNonTsExtensions: true, jsx: monaco.languages.typescript.JsxEmit.ReactJSX,
       allowJs: true, checkJs: true, strict: true, esModuleInterop: true, skipLibCheck: true,
+      baseUrl: projectPath || undefined,
     });
     monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({ noSemanticValidation: false, noSyntaxValidation: false });
     monacoRef.current = monaco;
@@ -635,6 +648,26 @@ function EditorPageContent() {
         })
         .catch(() => {});
     }
+    // Handle ctrl+click go-to-definition: open the target file in our editor
+    const editorService = (editor as any)._codeEditorService;
+    if (editorService) {
+      editorService.openCodeEditor = async (input: any, source: any) => {
+        const uri = input?.resource;
+        if (uri?.path) {
+          handleFileSelect(uri.path);
+          // After file loads, jump to the line
+          setTimeout(() => {
+            if (input.options?.selection) {
+              const sel = input.options.selection;
+              editor.revealLineInCenter(sel.startLineNumber);
+              editor.setPosition({ lineNumber: sel.startLineNumber, column: sel.startColumn || 1 });
+            }
+          }, 300);
+        }
+        return source;
+      };
+    }
+    
     editor.focus();
   };
 
