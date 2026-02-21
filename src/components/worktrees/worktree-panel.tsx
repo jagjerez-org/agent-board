@@ -348,6 +348,38 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
     };
   }, []);
 
+  const restoreTmuxSessions = useCallback(async (branch: string) => {
+    try {
+      const res = await fetch(`/api/git/worktrees/sessions?project=${encodeURIComponent(selectedProject)}&branch=${encodeURIComponent(branch)}`);
+      if (!res.ok) return false;
+      const data = await res.json();
+      const sessions: Array<{ sessionName: string; consoleId: string }> = data.sessions || [];
+      if (sessions.length === 0) return false;
+
+      const restoredTabs: ConsoleTab[] = sessions.map((s, i) => ({
+        id: s.consoleId,
+        branch,
+        label: `Console ${i + 1}`,
+        command: undefined,
+      }));
+
+      setConsoleTabs(prev => {
+        const n = new Map(prev);
+        n.set(branch, restoredTabs);
+        return n;
+      });
+      setActiveConsoleTab(prev => {
+        const n = new Map(prev);
+        n.set(branch, restoredTabs[0].id);
+        return n;
+      });
+
+      // Subscribe to each restored session
+      restoredTabs.forEach(t => subscribeLogs(branch, t.id));
+      return true;
+    } catch { return false; }
+  }, [selectedProject, subscribeLogs]);
+
   const toggleLogs = (branch: string) => {
     setExpandedLogs(prev => {
       const next = new Set(prev);
@@ -358,9 +390,14 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
         tabs.forEach(t => unsubscribeLogs(branch, t.id));
       } else {
         next.add(branch);
-        // Create first console tab if none exist
+        // Try to restore existing tmux sessions first
         if (!consoleTabs.get(branch)?.length) {
-          addConsoleTab(branch);
+          restoreTmuxSessions(branch).then(restored => {
+            if (!restored) {
+              // No existing sessions — create a fresh console
+              addConsoleTab(branch);
+            }
+          });
         } else {
           // Re-subscribe existing tabs
           const tabs = consoleTabs.get(branch) || [];
