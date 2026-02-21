@@ -292,7 +292,7 @@ function EditorPageContent() {
         setActiveFile(filePath);
         // Load types for imports in this file
         if (language === 'typescript' || language === 'typescriptreact' || language === 'javascript' || language === 'javascriptreact') {
-          loadTypesForContent(data.content);
+          loadTypesForContent(data.content, filePath);
         }
       } else { setError(data.isBinary ? 'Cannot open binary file' : (data.error || 'Failed')); }
     } catch { setError('Network error'); }
@@ -463,38 +463,95 @@ function EditorPageContent() {
   useEffect(() => { if (globalSearchVisible) setTimeout(() => globalSearchRef.current?.focus(), 50); }, [globalSearchVisible]);
 
   // Load type definitions for imports in the current file
-  const loadTypesForContent = useCallback(async (content: string) => {
+  const loadTypesForContent = useCallback(async (content: string, filePath: string) => {
     if (!monacoRef.current || !projectPath) return;
+    const monaco = monacoRef.current;
     
-    // Extract package names from imports
-    const importRegex = /(?:import|from)\s+['"]([^'"./][^'"]*)['"]/g;
-    const packages = new Set<string>();
-    let match;
-    while ((match = importRegex.exec(content)) !== null) {
-      let pkg = match[1];
-      // Handle scoped packages: @scope/pkg/subpath -> @scope/pkg
-      if (pkg.startsWith('@')) {
-        const parts = pkg.split('/');
-        pkg = parts.slice(0, 2).join('/');
-      } else {
-        pkg = pkg.split('/')[0];
-      }
-      if (!loadedTypesRef.current.has(pkg)) packages.add(pkg);
+    // Register this file itself so other files can reference it
+    const fileUri = `file://${filePath}`;
+    if (!loadedTypesRef.current.has(fileUri)) {
+      monaco.languages.typescript.typescriptDefaults.addExtraLib(content, fileUri);
+      monaco.languages.typescript.javascriptDefaults.addExtraLib(content, fileUri);
+      loadedTypesRef.current.add(fileUri);
     }
 
-    if (packages.size === 0) return;
-
-    try {
-      const r = await fetch(`/api/files/types?path=${encodeURIComponent(projectPath)}&packages=${encodeURIComponent([...packages].join(','))}`);
-      if (!r.ok) return;
-      const data = await r.json();
-      const monaco = monacoRef.current;
-      for (const file of data.files || []) {
-        monaco.languages.typescript.typescriptDefaults.addExtraLib(file.content, file.path);
-        monaco.languages.typescript.javascriptDefaults.addExtraLib(file.content, file.path);
+    // Extract all imports
+    const importRegex = /(?:import|from|require\()\s*['"]([^'"]+)['"]/g;
+    const npmPackages = new Set<string>();
+    const relativeImports = new Set<string>();
+    let match;
+    while ((match = importRegex.exec(content)) !== null) {
+      const imp = match[1];
+      if (imp.startsWith('.')) {
+        relativeImports.add(imp);
+      } else {
+        // npm package
+        let pkg = imp;
+        if (pkg.startsWith('@')) {
+          const parts = pkg.split('/');
+          pkg = parts.slice(0, 2).join('/');
+        } else {
+          pkg = pkg.split('/')[0];
+        }
+        if (!loadedTypesRef.current.has(pkg)) npmPackages.add(pkg);
       }
-      for (const pkg of packages) loadedTypesRef.current.add(pkg);
-    } catch { /* silent */ }
+    }
+
+    // Load npm package types
+    if (npmPackages.size > 0) {
+      try {
+        const r = await fetch(`/api/files/types?path=${encodeURIComponent(projectPath)}&packages=${encodeURIComponent([...npmPackages].join(','))}`);
+        if (r.ok) {
+          const data = await r.json();
+          for (const file of data.files || []) {
+            monaco.languages.typescript.typescriptDefaults.addExtraLib(file.content, file.path);
+            monaco.languages.typescript.javascriptDefaults.addExtraLib(file.content, file.path);
+          }
+          for (const pkg of npmPackages) loadedTypesRef.current.add(pkg);
+        }
+      } catch { /* silent */ }
+    }
+
+    // Load relative imports
+    if (relativeImports.size > 0) {
+      const fileDir = filePath.substring(0, filePath.lastIndexOf('/'));
+      for (const rel of relativeImports) {
+        // Resolve relative path
+        const parts = fileDir.split('/');
+        const relParts = rel.split('/');
+        const resolved = [...parts];
+        for (const p of relParts) {
+          if (p === '.') continue;
+          if (p === '..') resolved.pop();
+          else resolved.push(p);
+        }
+        const basePath = resolved.join('/');
+        
+        // Try common extensions
+        const extensions = ['', '.ts', '.tsx', '.js', '.jsx', '.d.ts', '/index.ts', '/index.tsx', '/index.js', '/index.d.ts'];
+        for (const ext of extensions) {
+          const tryPath = basePath + ext;
+          const tryUri = `file://${tryPath}`;
+          if (loadedTypesRef.current.has(tryUri)) break;
+          try {
+            const r = await fetch(`/api/files/content?path=${encodeURIComponent(tryPath)}`);
+            if (r.ok) {
+              const data = await r.json();
+              if (data.content) {
+                monaco.languages.typescript.typescriptDefaults.addExtraLib(data.content, tryUri);
+                monaco.languages.typescript.javascriptDefaults.addExtraLib(data.content, tryUri);
+                loadedTypesRef.current.add(tryUri);
+                // Recursively load this file's imports too
+                if (data.content.includes('import') || data.content.includes('from')) {
+                  loadTypesForContent(data.content, tryPath);
+                }
+              }
+              break;
+            }
+          } catch { /* skip */ }
+        }
+      }
+    }
   }, [projectPath]);
 
   const handleGlobalSearch = async () => {
