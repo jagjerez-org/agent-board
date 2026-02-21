@@ -16,12 +16,20 @@ await fs.mkdir(path.join(testDataDir, 'data', 'projects'), { recursive: true });
 await fs.mkdir(path.join(testDataDir, 'data', 'agents'), { recursive: true });
 await fs.mkdir(path.join(testDataDir, 'data', 'config'), { recursive: true });
 
-// Clean up function
+// Clean up function — clear contents but keep directory structure
 export async function cleanupTestDir() {
-  try {
-    await fs.rm(testDataDir, { recursive: true, force: true });
-  } catch {
-    // Ignore errors
+  const dirs = ['data/tasks', 'data/projects', 'data/agents', 'data/config'];
+  for (const dir of dirs) {
+    const fullPath = path.join(testDataDir, dir);
+    try {
+      const entries = await fs.readdir(fullPath);
+      for (const entry of entries) {
+        await fs.rm(path.join(fullPath, entry), { recursive: true, force: true });
+      }
+    } catch {
+      // Dir might not exist, recreate it
+      await fs.mkdir(fullPath, { recursive: true });
+    }
   }
 }
 
