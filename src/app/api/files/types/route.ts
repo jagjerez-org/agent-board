@@ -35,20 +35,57 @@ async function resolvePackageTypes(nodeModules: string, packageName: string): Pr
   const pkgDir = join(nodeModules, packageName);
   
   // Check @types package first
-  const atTypesName = packageName.startsWith('@') 
-    ? `@types/${packageName.slice(1).replace('/', '__')}` 
-    : `@types/${packageName}`;
+  const atTypesName = packageName.startsWith('@types/')
+    ? packageName
+    : packageName.startsWith('@') 
+      ? `@types/${packageName.slice(1).replace('/', '__')}` 
+      : `@types/${packageName}`;
   const atTypesDir = join(nodeModules, atTypesName);
   
-  // Try @types first
+  // Try @types first, then package dir, then pnpm store
   let typesDir = '';
   if (await fileExists(join(atTypesDir, 'index.d.ts'))) {
     typesDir = atTypesDir;
-  } else if (await fileExists(pkgDir)) {
+  } else if (await fileExists(join(pkgDir, 'index.d.ts')) || await fileExists(pkgDir)) {
     typesDir = pkgDir;
-  } else {
-    return { files };
   }
+  
+  // If not found, search in pnpm's .pnpm directory
+  if (!typesDir || !await fileExists(join(typesDir, 'index.d.ts'))) {
+    const pnpmDir = join(nodeModules, '.pnpm');
+    if (await fileExists(pnpmDir)) {
+      try {
+        const pnpmEntries = await readdir(pnpmDir);
+        const searchName = atTypesName.replace('/', '+').replace('@', '@');
+        const match = pnpmEntries
+          .filter(e => e.startsWith(searchName + '@'))
+          .sort()
+          .pop(); // latest version
+        if (match) {
+          const candidate = join(pnpmDir, match, 'node_modules', atTypesName);
+          if (await fileExists(join(candidate, 'index.d.ts'))) {
+            typesDir = candidate;
+          }
+        }
+        // Also try the package itself (not @types)
+        if (!typesDir && !packageName.startsWith('@types/')) {
+          const pkgSearchName = packageName.replace('/', '+').replace('@', '@');
+          const pkgMatch = pnpmEntries
+            .filter(e => e.startsWith(pkgSearchName + '@'))
+            .sort()
+            .pop();
+          if (pkgMatch) {
+            const candidate = join(pnpmDir, pkgMatch, 'node_modules', packageName);
+            if (await fileExists(candidate)) {
+              typesDir = candidate;
+            }
+          }
+        }
+      } catch { /* skip */ }
+    }
+  }
+  
+  if (!typesDir) return { files };
 
   // Read package.json to find types entry
   let typesEntry = 'index.d.ts';
@@ -59,32 +96,52 @@ async function resolvePackageTypes(nodeModules: string, packageName: string): Pr
     typesEntry = typesEntry.replace(/^\.\//, '');
   } catch { /* use default */ }
 
-  // Read the main types file
-  const mainTypesPath = join(typesDir, typesEntry);
-  if (await fileExists(mainTypesPath)) {
+  // Recursively load type files starting from the entry point
+  const pkgPrefix = typesDir === atTypesDir ? atTypesName : packageName;
+  const visited = new Set<string>();
+  
+  async function loadTypeFile(filePath: string) {
+    if (visited.has(filePath)) return;
+    visited.add(filePath);
+    if (visited.size > 100) return; // safety limit
+    
+    if (!await fileExists(filePath)) {
+      // Try adding .d.ts extension
+      if (await fileExists(filePath + '.d.ts')) filePath = filePath + '.d.ts';
+      else return;
+    }
+    
     try {
-      const content = await readFile(mainTypesPath, 'utf8');
-      const uri = `file:///node_modules/${typesDir === atTypesDir ? atTypesName : packageName}/${typesEntry}`;
+      const content = await readFile(filePath, 'utf8');
+      const relativePath = filePath.substring(typesDir.length + 1);
+      const uri = `file:///node_modules/${pkgPrefix}/${relativePath}`;
       files.push({ path: uri, content });
       
-      // Also load referenced files (basic: look for /// <reference and imports)
-      const refs = content.matchAll(/(?:\/\/\/\s*<reference\s+path="([^"]+)"|from\s+['"]\.\/([^'"]+)['"])/g);
+      // Find references and relative imports
+      const refs = [...content.matchAll(/\/\/\/\s*<reference\s+(?:path|types)="([^"]+)"/g)];
+      const imports = [...content.matchAll(/from\s+['"](\.[^'"]+)['"]/g)];
+      
       for (const ref of refs) {
-        const refPath = ref[1] || ref[2];
-        if (refPath) {
-          let fullRef = join(dirname(mainTypesPath), refPath);
-          if (!fullRef.endsWith('.d.ts') && !fullRef.endsWith('.ts')) fullRef += '.d.ts';
-          if (await fileExists(fullRef)) {
-            try {
-              const refContent = await readFile(fullRef, 'utf8');
-              const refUri = `file:///node_modules/${typesDir === atTypesDir ? atTypesName : packageName}/${join(dirname(typesEntry), refPath)}`;
-              files.push({ path: refUri, content: refContent });
-            } catch { /* skip */ }
-          }
+        const refName = ref[1];
+        let refPath: string;
+        if (ref[0].includes('types=')) {
+          // /// <reference types="..." /> — skip, it's another package
+          continue;
         }
+        refPath = join(dirname(filePath), refName);
+        if (!refPath.endsWith('.d.ts') && !refPath.endsWith('.ts')) refPath += '.d.ts';
+        await loadTypeFile(refPath);
+      }
+      
+      for (const imp of imports) {
+        let impPath = join(dirname(filePath), imp[1]);
+        if (!impPath.endsWith('.d.ts') && !impPath.endsWith('.ts')) impPath += '.d.ts';
+        await loadTypeFile(impPath);
       }
     } catch { /* skip */ }
   }
+  
+  await loadTypeFile(join(typesDir, typesEntry));
 
   return { files };
 }

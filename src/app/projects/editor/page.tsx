@@ -584,6 +584,21 @@ function EditorPageContent() {
     });
     monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({ noSemanticValidation: false, noSyntaxValidation: false });
     monacoRef.current = monaco;
+    // Pre-load @types/node so Buffer, process, etc. are available
+    if (projectPath) {
+      fetch(`/api/files/types?path=${encodeURIComponent(projectPath)}&packages=${encodeURIComponent('@types/node')}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          if (data?.files) {
+            for (const f of data.files) {
+              monaco.languages.typescript.typescriptDefaults.addExtraLib(f.content, f.path);
+              monaco.languages.typescript.javascriptDefaults.addExtraLib(f.content, f.path);
+            }
+            loadedTypesRef.current.add('@types/node');
+          }
+        })
+        .catch(() => {});
+    }
     editor.focus();
   };
 
