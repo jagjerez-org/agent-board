@@ -12,7 +12,7 @@ import {
 import {
   Folder, FolderOpen, File, X, Save, Loader2, ChevronRight, ChevronDown,
   FileText, Code, Database, Settings, Image, Archive, AlertCircle, Dot,
-  FolderPlus, FilePlus, RefreshCw, GitBranch, Plus, Minus, Edit3,
+  FolderPlus, FilePlus, RefreshCw, GitBranch, Plus, Minus, Edit3, Search,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -224,6 +224,20 @@ function EditorPageContent() {
   const [diffView, setDiffView] = useState<{ file: string; original: string; modified: string; language: string } | null>(null);
   const editorRef = useRef<any>(null);
 
+  // Quick Open (Ctrl+P)
+  const [quickOpenVisible, setQuickOpenVisible] = useState(false);
+  const [quickOpenQuery, setQuickOpenQuery] = useState('');
+  const [quickOpenResults, setQuickOpenResults] = useState<Array<{ path: string; fullPath: string }>>([]);
+  const [quickOpenIdx, setQuickOpenIdx] = useState(0);
+  const quickOpenRef = useRef<HTMLInputElement>(null);
+
+  // Global Search (Ctrl+Shift+F)
+  const [globalSearchVisible, setGlobalSearchVisible] = useState(false);
+  const [globalSearchQuery, setGlobalSearchQuery] = useState('');
+  const [globalSearchResults, setGlobalSearchResults] = useState<Array<{ path: string; fullPath: string; matches: Array<{ line: number; text: string }> }>>([]);
+  const [globalSearchLoading, setGlobalSearchLoading] = useState(false);
+  const globalSearchRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     const project = searchParams.get('project');
     const branch = searchParams.get('branch');
@@ -407,10 +421,51 @@ function EditorPageContent() {
   };
 
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); handleSave(); } };
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); handleSave(); }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'p' && !e.shiftKey) {
+        e.preventDefault();
+        setQuickOpenVisible(v => !v);
+        setQuickOpenQuery(''); setQuickOpenResults([]); setQuickOpenIdx(0);
+      }
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'F') {
+        e.preventDefault();
+        setGlobalSearchVisible(v => !v);
+        setGlobalSearchQuery(''); setGlobalSearchResults([]);
+      }
+    };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [activeFile, openFiles]);
+
+  // Quick Open search
+  useEffect(() => {
+    if (!quickOpenVisible || !quickOpenQuery || !projectPath) { setQuickOpenResults([]); return; }
+    const timeout = setTimeout(async () => {
+      try {
+        const r = await fetch(`/api/files/search?path=${encodeURIComponent(projectPath)}&q=${encodeURIComponent(quickOpenQuery)}&type=filename`);
+        const data = await r.json();
+        setQuickOpenResults(data.files || []);
+        setQuickOpenIdx(0);
+      } catch { /* ignore */ }
+    }, 150);
+    return () => clearTimeout(timeout);
+  }, [quickOpenQuery, quickOpenVisible, projectPath]);
+
+  // Focus input when opening
+  useEffect(() => { if (quickOpenVisible) setTimeout(() => quickOpenRef.current?.focus(), 50); }, [quickOpenVisible]);
+  useEffect(() => { if (globalSearchVisible) setTimeout(() => globalSearchRef.current?.focus(), 50); }, [globalSearchVisible]);
+
+  const handleGlobalSearch = async () => {
+    if (!globalSearchQuery || !projectPath) return;
+    setGlobalSearchLoading(true);
+    try {
+      const r = await fetch(`/api/files/search?path=${encodeURIComponent(projectPath)}&q=${encodeURIComponent(globalSearchQuery)}&type=content`);
+      const data = await r.json();
+      setGlobalSearchResults(data.results || []);
+    } catch { /* ignore */ }
+    finally { setGlobalSearchLoading(false); }
+  };
 
   useEffect(() => {
     const move = (e: MouseEvent) => { if (isResizing) setSidebarWidth(Math.max(180, Math.min(500, e.clientX))); };
@@ -587,6 +642,115 @@ function EditorPageContent() {
           </div>
         </div>
       </div>
+
+      {/* Quick Open (Ctrl+P) */}
+      {quickOpenVisible && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh]" onClick={() => setQuickOpenVisible(false)}>
+          <div className="w-[560px] bg-[#1e1e1e] border border-[#454545] rounded-md shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center border-b border-[#454545] px-3">
+              <Code className="w-4 h-4 text-muted-foreground shrink-0" />
+              <input
+                ref={quickOpenRef}
+                className="flex-1 bg-transparent text-sm text-white px-2 py-2.5 outline-none placeholder:text-muted-foreground"
+                placeholder="Search files by name..."
+                value={quickOpenQuery}
+                onChange={e => setQuickOpenQuery(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Escape') setQuickOpenVisible(false);
+                  if (e.key === 'ArrowDown') { e.preventDefault(); setQuickOpenIdx(i => Math.min(i + 1, quickOpenResults.length - 1)); }
+                  if (e.key === 'ArrowUp') { e.preventDefault(); setQuickOpenIdx(i => Math.max(i - 1, 0)); }
+                  if (e.key === 'Enter' && quickOpenResults[quickOpenIdx]) {
+                    handleFileSelect(quickOpenResults[quickOpenIdx].fullPath);
+                    setQuickOpenVisible(false);
+                  }
+                }}
+              />
+            </div>
+            <div className="max-h-[300px] overflow-y-auto scrollbar-thin">
+              {quickOpenResults.length === 0 && quickOpenQuery && (
+                <div className="px-4 py-3 text-xs text-muted-foreground">No files found</div>
+              )}
+              {quickOpenResults.map((f, i) => (
+                <div
+                  key={f.path}
+                  className={cn(
+                    "flex items-center gap-2 px-3 py-1.5 cursor-pointer text-sm",
+                    i === quickOpenIdx ? "bg-[#04395e]" : "hover:bg-[#2a2d2e]"
+                  )}
+                  onClick={() => { handleFileSelect(f.fullPath); setQuickOpenVisible(false); }}
+                  onMouseEnter={() => setQuickOpenIdx(i)}
+                >
+                  {getFileIcon(f.path.split('/').pop() || '')}
+                  <span className="text-white">{f.path.split('/').pop()}</span>
+                  <span className="text-muted-foreground text-xs truncate ml-auto">{f.path}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Global Search (Ctrl+Shift+F) */}
+      {globalSearchVisible && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center pt-[10vh]" onClick={() => setGlobalSearchVisible(false)}>
+          <div className="w-[600px] bg-[#1e1e1e] border border-[#454545] rounded-md shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center border-b border-[#454545] px-3 gap-2">
+              <Code className="w-4 h-4 text-muted-foreground shrink-0" />
+              <input
+                ref={globalSearchRef}
+                className="flex-1 bg-transparent text-sm text-white px-2 py-2.5 outline-none placeholder:text-muted-foreground"
+                placeholder="Search in files..."
+                value={globalSearchQuery}
+                onChange={e => setGlobalSearchQuery(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Escape') setGlobalSearchVisible(false);
+                  if (e.key === 'Enter') handleGlobalSearch();
+                }}
+              />
+              {globalSearchLoading && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
+            </div>
+            <div className="max-h-[400px] overflow-y-auto scrollbar-thin">
+              {globalSearchResults.length === 0 && globalSearchQuery && !globalSearchLoading && (
+                <div className="px-4 py-3 text-xs text-muted-foreground">No results. Press Enter to search.</div>
+              )}
+              {globalSearchResults.map(file => (
+                <div key={file.path} className="border-b border-[#2a2d2e] last:border-0">
+                  <div
+                    className="flex items-center gap-2 px-3 py-1.5 hover:bg-[#2a2d2e] cursor-pointer"
+                    onClick={() => { handleFileSelect(file.fullPath); setGlobalSearchVisible(false); }}
+                  >
+                    {getFileIcon(file.path.split('/').pop() || '')}
+                    <span className="text-white text-sm font-medium">{file.path.split('/').pop()}</span>
+                    <span className="text-muted-foreground text-xs truncate ml-auto">{file.path}</span>
+                    <Badge variant="secondary" className="text-[10px] px-1 py-0">{file.matches.length}</Badge>
+                  </div>
+                  {file.matches.map((m, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center gap-2 px-6 py-1 hover:bg-[#2a2d2e] cursor-pointer text-xs"
+                      onClick={() => {
+                        handleFileSelect(file.fullPath);
+                        setGlobalSearchVisible(false);
+                        // Jump to line after editor loads
+                        setTimeout(() => {
+                          if (editorRef.current) {
+                            editorRef.current.revealLineInCenter(m.line);
+                            editorRef.current.setPosition({ lineNumber: m.line, column: 1 });
+                            editorRef.current.focus();
+                          }
+                        }, 300);
+                      }}
+                    >
+                      <span className="text-yellow-500 font-mono w-8 text-right shrink-0">{m.line}</span>
+                      <span className="text-muted-foreground truncate">{m.text}</span>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       <Dialog open={createDialog.open} onOpenChange={open => { if (!open) setCreateDialog(c => ({ ...c, open: false })); }}>
         <DialogContent className="sm:max-w-md">

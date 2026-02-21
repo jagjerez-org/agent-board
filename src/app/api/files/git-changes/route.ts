@@ -18,19 +18,6 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const requestedPath = searchParams.get('path');
-    // Prefer origin/ refs to avoid stale local refs in worktrees
-    let base = searchParams.get('base') || '';
-    if (!base) {
-      const cwd = validation.fullPath!;
-      for (const ref of ['origin/master', 'origin/main', 'master', 'main']) {
-        try {
-          await execAsync(`git rev-parse --verify ${ref}`, { cwd });
-          base = ref;
-          break;
-        } catch { /* try next */ }
-      }
-      if (!base) base = 'master';
-    }
 
     if (!requestedPath) {
       return NextResponse.json({ error: 'Path required' }, { status: 400 });
@@ -42,6 +29,19 @@ export async function GET(request: NextRequest) {
     }
 
     const cwd = validation.fullPath!;
+
+    // Prefer origin/ refs to avoid stale local refs in worktrees
+    let base = searchParams.get('base') || '';
+    if (!base) {
+      for (const ref of ['origin/master', 'origin/main', 'master', 'main']) {
+        try {
+          await execAsync(`git rev-parse --verify ${ref}`, { cwd });
+          base = ref;
+          break;
+        } catch { /* try next */ }
+      }
+      if (!base) base = 'master';
+    }
 
     // Get current branch
     let currentBranch = '';
