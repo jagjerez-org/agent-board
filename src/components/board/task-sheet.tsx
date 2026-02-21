@@ -40,7 +40,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Trash2, GitBranch, Check, ChevronsUpDown, Plus } from 'lucide-react';
+import { Trash2, GitBranch, Check, ChevronsUpDown, Plus, ChevronsRight, Maximize2, PanelRightClose } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -162,6 +162,7 @@ export function TaskSheet({ taskId, mode, open, onOpenChange, onSaved, defaultSt
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [panelSize, setPanelSize] = useState<'narrow' | 'wide' | 'full'>('narrow');
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -496,8 +497,39 @@ export function TaskSheet({ taskId, mode, open, onOpenChange, onSaved, defaultSt
 
   return (
     <>
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="sm:max-w-lg overflow-y-auto">
+    <Sheet open={open} onOpenChange={(v) => { if (!v) setPanelSize('narrow'); onOpenChange(v); }}>
+      <SheetContent className={cn(
+        "overflow-y-auto transition-all duration-200",
+        panelSize === 'narrow' && "sm:max-w-lg",
+        panelSize === 'wide' && "sm:max-w-3xl",
+        panelSize === 'full' && "sm:max-w-[100vw] w-full",
+      )}>
+        <div className="flex items-center gap-1 mb-2">
+          <button
+            type="button"
+            onClick={() => onOpenChange(false)}
+            title="Close panel"
+            className="p-1.5 rounded hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
+          >
+            <ChevronsRight className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setPanelSize(panelSize === 'wide' ? 'narrow' : 'wide')}
+            title={panelSize === 'wide' ? 'Narrow view' : 'Wide view'}
+            className={cn("p-1.5 rounded hover:bg-accent transition-colors", panelSize === 'wide' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground')}
+          >
+            <Maximize2 className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setPanelSize(panelSize === 'full' ? 'narrow' : 'full')}
+            title={panelSize === 'full' ? 'Side panel' : 'Full width'}
+            className={cn("p-1.5 rounded hover:bg-accent transition-colors", panelSize === 'full' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground')}
+          >
+            <PanelRightClose className="w-4 h-4" />
+          </button>
+        </div>
         <SheetHeader>
           <SheetTitle>{mode === 'create' ? 'New Task' : 'Edit Task'}</SheetTitle>
         </SheetHeader>
@@ -505,7 +537,7 @@ export function TaskSheet({ taskId, mode, open, onOpenChange, onSaved, defaultSt
         {loading ? (
           <div className="py-8 text-center text-muted-foreground">Loading...</div>
         ) : (
-          <div className="space-y-4 py-4">
+          <div className={cn("space-y-4 py-4", panelSize === 'full' ? "px-8 max-w-4xl mx-auto" : panelSize === 'wide' ? "px-4" : "px-1")}>
             <div>
               <label className="text-sm font-medium mb-1 block">Title *</label>
               <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Task title" />
