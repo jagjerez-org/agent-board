@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Activity, Users, FolderOpen, GitBranch, Wrench, LayoutDashboard, Server } from 'lucide-react';
+import { NotificationBell } from './notification-bell';
 
 const navItems = [
   { href: '/', label: 'Board', icon: LayoutDashboard },
@@ -26,7 +27,7 @@ function TopNavInner() {
 
   return (
     <header className="border-b border-border bg-card shrink-0">
-      <div className="flex items-center px-6 py-3">
+      <div className="flex items-center justify-between px-6 py-3">
         <div className="flex items-center space-x-4">
           <h1 className="text-2xl font-bold">📋 Agent Board</h1>
           <nav className="flex space-x-1">
@@ -46,6 +47,7 @@ function TopNavInner() {
             ))}
           </nav>
         </div>
+        <NotificationBell />
       </div>
     </header>
   );

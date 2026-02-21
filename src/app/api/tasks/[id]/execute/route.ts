@@ -2,6 +2,7 @@ import { spawnAgent } from '@/lib/openclaw-api';
 import { NextRequest, NextResponse } from 'next/server';
 import { getTask, moveTask } from '@/lib/task-store';
 import { eventBus } from '@/lib/event-bus';
+import { addNotification } from '@/lib/notification-service';
 import { readFile, writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
@@ -141,6 +142,14 @@ export async function PUT(request: NextRequest, { params }: Props) {
       completedAt: new Date().toISOString(),
       summary: summary || 'Completed',
     }), 'utf8');
+
+    await addNotification({
+      type: 'execution_done',
+      title: `Execution complete: ${result.task.title}`,
+      message: summary || `Agent ${agentId || 'unknown'} finished executing "${result.task.title}"`,
+      task_id: id,
+      agent_id: agentId || undefined,
+    });
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

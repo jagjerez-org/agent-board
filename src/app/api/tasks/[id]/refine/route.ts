@@ -1,6 +1,7 @@
 import { spawnAgent } from "@/lib/openclaw-api";
 import { NextRequest, NextResponse } from 'next/server';
 import { getTask, updateTask } from '@/lib/task-store';
+import { addNotification } from '@/lib/notification-service';
 import { readFile, writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
@@ -175,6 +176,14 @@ export async function PUT(request: NextRequest, { params }: Props) {
       id: uuidv4(), role: 'agent',
       content: '✅ Refinement complete.',
       timestamp: new Date().toISOString(), agent_id: agentId,
+    });
+
+    await addNotification({
+      type: 'refinement_done',
+      title: `Refinement complete: ${result.task.title}`,
+      message: `Agent ${agentId || 'unknown'} finished refining "${result.task.title}"`,
+      task_id: id,
+      agent_id: agentId || undefined,
     });
 
     return NextResponse.json({ success: true });
