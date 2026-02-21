@@ -124,3 +124,31 @@
     @apply bg-background text-foreground;
   }
 }
+/* Notion-like Tiptap editor styles */
+.notion-editor-content h1 { @apply text-xl font-bold mt-6 mb-1; }
+.notion-editor-content h2 { @apply text-lg font-semibold mt-5 mb-1; }
+.notion-editor-content h3 { @apply text-base font-semibold mt-4 mb-0.5; }
+.notion-editor-content p { @apply text-sm my-1 leading-relaxed; }
+.notion-editor-content ul { @apply pl-6 my-1 list-disc; }
+.notion-editor-content ol { @apply pl-6 my-1 list-decimal; }
+.notion-editor-content li { @apply text-sm leading-relaxed; }
+.notion-editor-content li p { @apply my-0; }
+.notion-editor-content blockquote { @apply border-l-[3px] border-foreground/20 pl-3 my-2 text-foreground/60; }
+.notion-editor-content pre { @apply bg-muted rounded-md p-3 my-2 overflow-x-auto text-xs font-mono; }
+.notion-editor-content code { @apply bg-muted text-[#e06c75] px-1 py-0.5 rounded text-xs font-mono; }
+.notion-editor-content pre code { @apply bg-transparent text-foreground p-0; }
+.notion-editor-content hr { @apply my-4 border-none h-px bg-border; }
+.notion-editor-content a { @apply text-foreground/80 underline decoration-foreground/30 underline-offset-2 hover:decoration-foreground/60; }
+.notion-editor-content strong { @apply font-semibold text-foreground; }
+.notion-editor-content em { @apply text-foreground/60; }
+.notion-editor-content s { @apply text-foreground/40; }
+/* Task list */
+.notion-editor-content ul[data-type="taskList"] { @apply list-none pl-0; }
+.notion-editor-content ul[data-type="taskList"] li { @apply flex items-start gap-2; }
+.notion-editor-content ul[data-type="taskList"] li label { @apply mt-0.5; }
+.notion-editor-content ul[data-type="taskList"] li label input[type="checkbox"] { @apply w-4 h-4 rounded border-foreground/30 accent-blue-500; }
+/* Placeholder */
+.notion-editor-content p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  @apply text-muted-foreground/50 float-left h-0 pointer-events-none;
+}
