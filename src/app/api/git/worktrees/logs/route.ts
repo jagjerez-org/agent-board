@@ -227,7 +227,7 @@ export async function POST(request: NextRequest) {
     // Create tmux session if it doesn't exist
     if (!tmuxSessionExists(sessionName)) {
       createTmuxSession(sessionName, worktree.path);
-      // Set up environment silently
+      // Set up PATH silently, then clear screen
       const homeDir = process.env.HOME || '/root';
       const extraPaths = [
         `${homeDir}/flutter/bin`,
@@ -236,18 +236,8 @@ export async function POST(request: NextRequest) {
         `${homeDir}/.local/bin`,
         '/usr/local/bin',
       ].join(':');
-      // Source .env.local if it exists, set PATH, then clear the screen so init commands don't show
-      const initCmds = [
-        `export PATH="${extraPaths}:$PATH"`,
-        `[ -f .env.local ] && set -a && source .env.local && set +a`,
-        `[ -f .env ] && set -a && source .env && set +a`,
-        `clear`,
-      ];
-      for (const cmd of initCmds) {
-        sendTmuxKeys(sessionName, cmd);
-      }
-      // Wait for init to complete
-      await new Promise(r => setTimeout(r, 500));
+      sendTmuxKeys(sessionName, `export PATH="${extraPaths}:$PATH" && clear`);
+      await new Promise(r => setTimeout(r, 300));
     }
 
     // Send command
