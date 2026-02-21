@@ -435,9 +435,11 @@ function EditorPageContent() {
   const activeFileData = openFiles.find(f => f.path === activeFile);
   const getBreadcrumb = (p: string) => p ? p.replace(projectPath, '').replace(/^\//, '') || '/' : '';
 
+  const isEmbedded = searchParams.get('embedded') === 'true';
+
   return (
     <>
-      <div className="flex flex-1 overflow-hidden bg-background">
+      <div className={cn("flex overflow-hidden bg-background", isEmbedded ? "h-screen" : "flex-1")}>
         {/* Sidebar */}
         <div className="border-r bg-card flex flex-col overflow-hidden" style={{ width: sidebarWidth, minWidth: sidebarWidth }}>
           {/* Sidebar tabs */}

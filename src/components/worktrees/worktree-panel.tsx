@@ -1070,7 +1070,7 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
                               <iframe
                                 src={`/projects/editor?project=${encodeURIComponent(selectedProject)}&branch=${encodeURIComponent(wt.branch)}&embedded=true`}
                                 className="w-full border-0"
-                                style={{ height: '500px' }}
+                                style={{ height: 'calc(100vh - 200px)', minHeight: '400px' }}
                                 title={`Editor: ${wt.branch}`}
                               />
                             </div>
