@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-interface TreeNode { name: string; path: string; type: 'file' | 'dir'; children?: TreeNode[]; }
+interface TreeNode { name: string; path: string; type: 'file' | 'dir'; children?: TreeNode[]; childrenLoaded?: boolean; }
 interface OpenFile { path: string; content: string; originalContent: string; language: string; isUnsaved: boolean; }
 interface GitChange { status: string; path: string; fullPath: string; }
 interface WorkingChange { staged: string | null; unstaged: string | null; isUntracked: boolean; path: string; fullPath: string; }
@@ -100,9 +100,12 @@ function FileTreeNode({
           </div>
         )}
       </div>
-      {isExpanded && node.children && node.children.map(child => (
+      {isExpanded && node.children && node.children.length > 0 && node.children.map(child => (
         <FileTreeNode key={child.path} node={child} onFileSelect={onFileSelect} onContextAction={onContextAction} expandedDirs={expandedDirs} onToggleDir={onToggleDir} selectedFile={selectedFile} level={level + 1} />
       ))}
+      {isExpanded && !node.childrenLoaded && !node.children && (
+        <div className="text-xs text-muted-foreground py-1" style={{ paddingLeft: `${8 + (level + 1) * 16}px` }}>Loading...</div>
+      )}
     </div>
   );
 }
@@ -241,9 +244,19 @@ function EditorPageContent() {
     if (!projectPath) return;
     setLoading(true); setError('');
     try {
-      const r = await fetch(`/api/files/tree?path=${encodeURIComponent(projectPath)}&depth=3`);
+      const r = await fetch(`/api/files/tree?path=${encodeURIComponent(projectPath)}&depth=4`);
       const data = await r.json();
-      if (r.ok) setTree(data.tree || []);
+      if (r.ok) {
+        // Mark nodes with children as loaded
+        function markLoaded(nodes: TreeNode[]): TreeNode[] {
+          return nodes.map(n => ({
+            ...n,
+            childrenLoaded: n.type === 'dir' && n.children !== undefined,
+            children: n.children ? markLoaded(n.children) : undefined,
+          }));
+        }
+        setTree(markLoaded(data.tree || []));
+      }
       else setError(data.error || 'Failed');
     } catch { setError('Network error'); }
     finally { setLoading(false); }
@@ -302,9 +315,47 @@ function EditorPageContent() {
     } catch { setError('Failed to load diff'); }
   };
 
-  const handleToggleDir = (dirPath: string) => {
+  const handleToggleDir = async (dirPath: string) => {
+    const isExpanding = !expandedDirs.has(dirPath);
     setExpandedDirs(prev => { const n = new Set(prev); n.has(dirPath) ? n.delete(dirPath) : n.add(dirPath); return n; });
+    
+    if (isExpanding) {
+      // Check if this node needs children loaded
+      const node = findNode(tree, dirPath);
+      if (node && node.type === 'dir' && !node.childrenLoaded) {
+        try {
+          const r = await fetch(`/api/files/tree?path=${encodeURIComponent(dirPath)}&depth=1`);
+          const data = await r.json();
+          if (r.ok && data.tree) {
+            setTree(prev => updateNodeChildren(prev, dirPath, data.tree));
+          }
+        } catch { /* ignore */ }
+      }
+    }
   };
+  
+  function findNode(nodes: TreeNode[], targetPath: string): TreeNode | null {
+    for (const n of nodes) {
+      if (n.path === targetPath) return n;
+      if (n.children) {
+        const found = findNode(n.children, targetPath);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+  
+  function updateNodeChildren(nodes: TreeNode[], targetPath: string, children: TreeNode[]): TreeNode[] {
+    return nodes.map(n => {
+      if (n.path === targetPath) {
+        return { ...n, children, childrenLoaded: true };
+      }
+      if (n.children) {
+        return { ...n, children: updateNodeChildren(n.children, targetPath, children) };
+      }
+      return n;
+    });
+  }
 
   const handleContentChange = (path: string, content: string) => {
     setOpenFiles(prev => prev.map(f => f.path === path ? { ...f, content, isUnsaved: content !== f.originalContent } : f));

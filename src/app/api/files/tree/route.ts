@@ -84,13 +84,17 @@ async function buildTree(dirPath: string, maxDepth = 3, currentDepth = 0): Promi
         type: entry.isDirectory() ? 'dir' : 'file'
       };
 
-      // For directories, only load children if we haven't reached max depth
-      if (entry.isDirectory() && currentDepth < maxDepth - 1) {
-        try {
-          node.children = await buildTree(entryPath, maxDepth, currentDepth + 1);
-        } catch {
-          // If we can't read the directory, just mark it as empty
-          node.children = [];
+      // For directories, load children if within depth, otherwise mark as expandable
+      if (entry.isDirectory()) {
+        if (currentDepth < maxDepth - 1) {
+          try {
+            node.children = await buildTree(entryPath, maxDepth, currentDepth + 1);
+          } catch {
+            node.children = [];
+          }
+        } else {
+          // Don't set children — frontend knows it can lazy-load
+          node.children = undefined;
         }
       }
 
@@ -138,8 +142,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Path is not a directory' }, { status: 400 });
     }
     
-    const maxDepth = depthParam ? parseInt(depthParam, 10) : 2;
-    const tree = await buildTree(fullPath, Math.min(maxDepth, 5)); // Cap at 5 for performance
+    const maxDepth = depthParam ? parseInt(depthParam, 10) : 4;
+    const tree = await buildTree(fullPath, Math.min(maxDepth, 10));
     
     return NextResponse.json({
       path: requestedPath,
