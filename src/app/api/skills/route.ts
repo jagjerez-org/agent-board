@@ -45,8 +45,13 @@ async function discoverSkills(dir: string, source: SkillInfo['source']): Promise
   try {
     const entries = await fs.readdir(dir, { withFileTypes: true });
     for (const entry of entries) {
-      if (entry.isDirectory()) {
-        const skillPath = path.join(dir, entry.name);
+      // Resolve symlinks — isDirectory() returns false for symlinks
+      const skillPath = path.join(dir, entry.name);
+      let isDir = entry.isDirectory();
+      if (entry.isSymbolicLink()) {
+        try { const stat = await fs.stat(skillPath); isDir = stat.isDirectory(); } catch { continue; }
+      }
+      if (isDir) {
         const description = await getSkillDescription(skillPath);
         skills.push({
           name: entry.name,
