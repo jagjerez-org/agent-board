@@ -370,6 +370,15 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
         command: undefined,
       }));
 
+      // Update the counter to avoid ID collisions with restored sessions
+      const maxId = sessions.reduce((max, s) => {
+        const match = s.consoleId.match(/console[_-](\d+)/);
+        return match ? Math.max(max, parseInt(match[1])) : max;
+      }, 0);
+      if (maxId >= nextConsoleId.current) {
+        nextConsoleId.current = maxId + 1;
+      }
+
       setConsoleTabs(prev => {
         const n = new Map(prev);
         n.set(branch, restoredTabs);

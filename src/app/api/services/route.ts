@@ -43,7 +43,7 @@ function isSelfUrl(url: string): boolean {
     const parsed = new URL(url);
     const host = parsed.hostname;
     const port = parsed.port || (parsed.protocol === 'https:' ? '443' : '80');
-    const isSelf = (host === '127.0.0.1' || host === 'localhost' || host === '0.0.0.0') && port === '9100';
+    const isSelf = (host === '127.0.0.1' || host === 'localhost' || host === '0.0.0.0') && port === '9111';
     return isSelf;
   } catch { return false; }
 }
