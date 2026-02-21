@@ -302,7 +302,14 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
         
         // Handle tmux fullContent (initial load or output update)
         if (data.fullContent !== undefined) {
-          const lines = data.fullContent.split('\n').filter((l: string) => l.trim());
+          const lines = data.fullContent.split('\n').filter((l: string) => {
+            const trimmed = l.trim();
+            if (!trimmed) return false;
+            // Filter out init commands (PATH export)
+            if (trimmed.startsWith('export PATH=')) return false;
+            if (/^[a-z]+@[a-z]+:.*\$ export PATH=/.test(trimmed)) return false;
+            return true;
+          });
           const entries: LogEntry[] = lines.map((line: string) => ({
             type: 'stdout' as const,
             message: line,
@@ -955,7 +962,7 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
                                     <Label htmlFor={`auto-scroll-${wt.branch}`} className="text-[10px]">Auto</Label>
                                   </div>
                                   <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => {
-                                    navigator.clipboard.writeText(tabLogs.map(e => stripAnsi(`${e.type}: ${e.message}`)).join('\n'));
+                                    navigator.clipboard.writeText(tabLogs.map(e => stripAnsi(e.message)).join('\n'));
                                   }} title="Copy logs">
                                     <Copy className="w-3 h-3" />
                                   </Button>
@@ -1018,25 +1025,15 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
                                 className="h-64 overflow-auto bg-[#0a0a0a] text-white p-3 font-mono text-xs"
                               >
                                 {tabLogs.length === 0 ? (
-                                  <div className="text-gray-500 italic">No logs yet. Run a command or start a preview server.</div>
+                                  <div className="text-gray-500 italic">No logs yet. Run a command to start.</div>
                                 ) : (
                                   tabLogs.map((entry, i) => (
-                                    <div key={i} className="flex leading-5">
-                                      <span className="text-gray-500 mr-2 flex-shrink-0">
-                                        {new Date(entry.timestamp).toLocaleTimeString()}
-                                      </span>
-                                      <span className={`mr-2 flex-shrink-0 font-bold ${
-                                        entry.type === 'stdout' ? 'text-green-400' :
-                                        entry.type === 'stderr' ? 'text-red-400' :
-                                        entry.type === 'system' ? 'text-blue-400' : 'text-red-500'
-                                      }`}>
-                                        {entry.type === 'stdout' ? '[OUT]' : entry.type === 'stderr' ? '[ERR]' : entry.type === 'system' ? '[SYS]' : '[ERR]'}
-                                      </span>
+                                    <div key={i} className="leading-5">
                                       <span className={
-                                        entry.type === 'stderr' ? 'text-red-300' :
-                                        entry.type === 'system' ? 'text-blue-300' : 'text-gray-200'
+                                        entry.type === 'system' ? 'text-blue-400' :
+                                        entry.type === 'error' ? 'text-red-400' : 'text-gray-200'
                                       }>
-                                        {stripAnsi(entry.message)}
+                                        {entry.type === 'system' ? `[${entry.message}]` : stripAnsi(entry.message)}
                                       </span>
                                       {entry.exitCode !== undefined && (
                                         <Badge variant={entry.exitCode === 0 ? "default" : "destructive"} className="ml-2 text-[10px]">
