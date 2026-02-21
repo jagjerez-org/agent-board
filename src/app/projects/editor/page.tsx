@@ -293,6 +293,8 @@ function EditorPageContent() {
         // Load types for imports in this file
         if (language === 'typescript' || language === 'typescriptreact' || language === 'javascript' || language === 'javascriptreact') {
           loadTypesForContent(data.content, filePath);
+          // Run ESLint after a short delay
+          setTimeout(() => runLint(filePath), 500);
         }
       } else { setError(data.isBinary ? 'Cannot open binary file' : (data.error || 'Failed')); }
     } catch { setError('Network error'); }
@@ -397,7 +399,11 @@ function EditorPageContent() {
     setSaving(true);
     try {
       const r = await fetch('/api/files/content', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: file.path, content: file.content }) });
-      if (r.ok) { setOpenFiles(prev => prev.map(f => f.path === file.path ? { ...f, originalContent: f.content, isUnsaved: false } : f)); }
+      if (r.ok) { 
+        setOpenFiles(prev => prev.map(f => f.path === file.path ? { ...f, originalContent: f.content, isUnsaved: false } : f));
+        // Re-lint after save
+        runLint(file.path);
+      }
       else { const data = await r.json(); setError(data.error || 'Save failed'); }
     } catch { setError('Network error saving'); }
     finally { setSaving(false); }
@@ -554,6 +560,36 @@ function EditorPageContent() {
       }
     }
   }, [projectPath]);
+
+  // ESLint integration — run lint and show markers
+  const runLint = useCallback(async (filePath: string) => {
+    if (!monacoRef.current) return;
+    const monaco = monacoRef.current;
+    try {
+      const r = await fetch(`/api/files/lint?path=${encodeURIComponent(filePath)}`);
+      if (!r.ok) return;
+      const data = await r.json();
+      const diagnostics = data.diagnostics || [];
+      
+      // Find the model for this file
+      const models = monaco.editor.getModels();
+      const model = models.find((m: any) => m.uri.path === filePath || m.uri.toString().includes(filePath));
+      if (!model) return;
+
+      // Convert to Monaco markers
+      const markers = diagnostics.map((d: any) => ({
+        severity: d.severity === 2 ? monaco.MarkerSeverity.Error : monaco.MarkerSeverity.Warning,
+        startLineNumber: d.line,
+        startColumn: d.column,
+        endLineNumber: d.endLine || d.line,
+        endColumn: d.endColumn || d.column + 1,
+        message: d.ruleId ? `${d.message} (${d.ruleId})` : d.message,
+        source: 'ESLint',
+      }));
+
+      monaco.editor.setModelMarkers(model, 'eslint', markers);
+    } catch { /* silent */ }
+  }, []);
 
   const handleGlobalSearch = async () => {
     if (!globalSearchQuery || !projectPath) return;
