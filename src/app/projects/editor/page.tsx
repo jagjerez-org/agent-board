@@ -468,7 +468,8 @@ function EditorPageContent() {
     const monaco = monacoRef.current;
     
     // Register this file itself so other files can reference it
-    const fileUri = `file://${filePath}`;
+    // Monaco path prop uses the raw path as URI
+    const fileUri = filePath;
     if (!loadedTypesRef.current.has(fileUri)) {
       monaco.languages.typescript.typescriptDefaults.addExtraLib(content, fileUri);
       monaco.languages.typescript.javascriptDefaults.addExtraLib(content, fileUri);
@@ -531,7 +532,7 @@ function EditorPageContent() {
         const extensions = ['', '.ts', '.tsx', '.js', '.jsx', '.d.ts', '/index.ts', '/index.tsx', '/index.js', '/index.d.ts'];
         for (const ext of extensions) {
           const tryPath = basePath + ext;
-          const tryUri = `file://${tryPath}`;
+          const tryUri = tryPath;
           if (loadedTypesRef.current.has(tryUri)) break;
           try {
             const r = await fetch(`/api/files/content?path=${encodeURIComponent(tryPath)}`);
@@ -717,6 +718,7 @@ function EditorPageContent() {
                 height="100%"
                 language={activeFileData.language}
                 value={activeFileData.content}
+                path={activeFileData.path}
                 theme="vs-dark"
                 options={{
                   minimap: { enabled: true }, fontSize: 14, lineNumbers: 'on', wordWrap: 'on',
