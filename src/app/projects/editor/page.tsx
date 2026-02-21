@@ -810,6 +810,7 @@ function EditorPageContent() {
                   suggestOnTriggerCharacters: true, quickSuggestions: true,
                   parameterHints: { enabled: true }, formatOnPaste: true,
                   bracketPairColorization: { enabled: true },
+                  fixedOverflowWidgets: true,
                 }}
                 onChange={v => handleContentChange(activeFileData.path, v || '')}
                 onMount={handleEditorMount}
