@@ -33,37 +33,6 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Package release zip
-        run: |
-          VERSION=$(node -p 'require("./package.json").version')
-          ZIP_NAME="agent-board-v${VERSION}.zip"
-          zip -r "$ZIP_NAME" . \
-            -x "node_modules/*" ".next/*" ".git/*" "coverage/*" ".env*" "data/*" "*.tsbuildinfo"
-          echo "ZIP_NAME=$ZIP_NAME" >> "$GITHUB_ENV"
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-
-      - name: Upload release artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: agent-board-v${{ env.VERSION }}
-          path: ${{ env.ZIP_NAME }}
-          retention-days: 30
-
-      - name: Package skill zip
-        run: |
-          mkdir -p dist
-          SKILL_ZIP="dist/agent-board-skill-v${VERSION}.zip"
-          # Skill zip contains SKILL.md + scripts for OpenClaw skill installation
-          cd skill && zip -r "../${SKILL_ZIP}" SKILL.md scripts/
-          echo "SKILL_ZIP=$SKILL_ZIP" >> "$GITHUB_ENV"
-
-      - name: Upload skill artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: agent-board-skill-v${{ env.VERSION }}
-          path: ${{ env.SKILL_ZIP }}
-          retention-days: 30
-
   release:
     needs: ci
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
@@ -74,50 +43,38 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
       - name: Get version
         id: ver
         run: echo "VERSION=$(node -p 'require("./package.json").version')" >> "$GITHUB_OUTPUT"
 
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
+      - name: Check if release exists
+        id: check
+        run: |
+          if gh release view "v${{ steps.ver.outputs.VERSION }}" &>/dev/null; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Package release zip
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          VERSION="${{ steps.ver.outputs.VERSION }}"
+          zip -r "agent-board-v${VERSION}.zip" . \
+            -x "node_modules/*" ".next/*" ".git/*" "coverage/*" ".env*" "data/*" "*.tsbuildinfo"
 
       - name: Create GitHub Release
+        if: steps.check.outputs.exists == 'false'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.ver.outputs.VERSION }}
           name: v${{ steps.ver.outputs.VERSION }}
           generate_release_notes: true
           make_latest: true
-          files: |
-            artifacts/agent-board-v${{ steps.ver.outputs.VERSION }}/*.zip
-            artifacts/agent-board-skill-v${{ steps.ver.outputs.VERSION }}/*.zip
-
-  publish-clawhub:
-    needs: ci
-    # Disabled: ClawHub requires GitHub account > 7 days old. Re-enable after ~2026-02-24.
-    if: false && github.ref == 'refs/heads/main' && github.event_name == 'push'
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      - name: Install ClawHub CLI
-        run: npm i -g clawhub
-
-      - name: Publish to ClawHub
-        env:
-          CLAWHUB_TOKEN: ${{ secrets.CLAWHUB_TOKEN }}
-        run: |
-          clawhub login --token "$CLAWHUB_TOKEN"
-          clawhub publish . \
-            --slug agent-board \
-            --name "Agent Board" \
-            --version "$(node -p 'require("./package.json").version')" \
-            --changelog "Automated publish from CI"
+          files: agent-board-v${{ steps.ver.outputs.VERSION }}.zip
