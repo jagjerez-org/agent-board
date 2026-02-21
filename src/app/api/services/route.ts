@@ -38,18 +38,45 @@ async function saveServices(services: ServiceConfig[]) {
   await fs.writeFile(SERVICES_FILE, JSON.stringify(services, null, 2));
 }
 
+function isSelfUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname;
+    const port = parsed.port || (parsed.protocol === 'https:' ? '443' : '80');
+    const isSelf = (host === '127.0.0.1' || host === 'localhost' || host === '0.0.0.0') && port === '9100';
+    return isSelf;
+  } catch { return false; }
+}
+
 async function checkHealth(service: ServiceConfig): Promise<ServiceStatus> {
+  // Self-referential check: if this service points to ourselves, check via port listener instead of HTTP
+  // (curl to self deadlocks because Next.js blocks on the synchronous execSync)
+  if (isSelfUrl(service.healthUrl)) {
+    try {
+      const portMatch = service.healthUrl.match(/:(\d+)/);
+      if (portMatch) {
+        const result = execSync(`ss -tlnp | grep -q ":${portMatch[1]} " && echo "up" || echo "down"`, { timeout: 3000 }).toString().trim();
+        let pid: number | undefined;
+        try {
+          const pidResult = execSync(`fuser ${portMatch[1]}/tcp 2>/dev/null || true`, { timeout: 3000 }).toString().trim();
+          if (pidResult) pid = parseInt(pidResult.split(/\s+/)[0]);
+        } catch { /* ignore */ }
+        return { ...service, status: result === 'up' ? 'up' : 'down', pid };
+      }
+    } catch { /* fallthrough */ }
+    return { ...service, status: 'unknown' };
+  }
+
   try {
     const result = execSync(
-      `curl -s -o /dev/null -w "%{http_code}" --connect-timeout 3 "${service.healthUrl}"`,
-      { timeout: 5000 }
+      `curl -s -o /dev/null -w "%{http_code}" --connect-timeout 3 --max-time 6 "${service.healthUrl}"`,
+      { timeout: 8000 }
     ).toString().trim();
     const code = parseInt(result);
     const isUp = code >= 200 && code < 400;
     
     let pid: number | undefined;
     try {
-      // Try to find PID by port
       const portMatch = service.healthUrl.match(/:(\d+)/);
       if (portMatch) {
         const pidResult = execSync(`fuser ${portMatch[1]}/tcp 2>/dev/null || true`, { timeout: 3000 }).toString().trim();
