@@ -212,6 +212,9 @@ export function TaskSheet({ taskId, mode, open, onOpenChange, onSaved, defaultSt
   const [execLogs, setExecLogs] = useState<string[]>([]);
   const execLogsEndRef = useRef<HTMLDivElement>(null);
 
+  // Refinement status
+  const [refineStatus, setRefineStatus] = useState<{ status: string; agentId?: string; startedAt?: string; completedAt?: string; sessionKey?: string } | null>(null);
+
   // Load projects and agents
   useEffect(() => {
     if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
@@ -349,6 +352,29 @@ export function TaskSheet({ taskId, mode, open, onOpenChange, onSaved, defaultSt
     
     pollExec();
     const interval = setInterval(pollExec, 5000);
+    return () => clearInterval(interval);
+  }, [taskId, open, mode]);
+
+  // Poll refinement status
+  useEffect(() => {
+    if (!taskId || !open || mode !== 'edit') return;
+    
+    const pollRefine = async () => {
+      try {
+        const res = await fetch(`/api/tasks/${taskId}/refine`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.status !== 'idle') {
+            setRefineStatus(data);
+          } else {
+            setRefineStatus(null);
+          }
+        }
+      } catch { /* ignore */ }
+    };
+    
+    pollRefine();
+    const interval = setInterval(pollRefine, 3000);
     return () => clearInterval(interval);
   }, [taskId, open, mode]);
 
@@ -558,8 +584,17 @@ export function TaskSheet({ taskId, mode, open, onOpenChange, onSaved, defaultSt
                 <div className="flex items-center justify-between px-4 py-2 border-b bg-muted/40">
                   <label className="text-sm font-bold flex items-center gap-2">
                     🔍 Refinement
-                    {refining && <span className="text-xs text-yellow-500 animate-pulse">Agent working...</span>}
+                    {refineStatus && (refineStatus.status === 'pending' || refineStatus.status === 'spawned' || refineStatus.status === 'running') && (
+                      <span className="text-xs text-blue-400 animate-pulse">
+                        {refineStatus.status === 'pending' ? 'Queued...' : 'Agent working...'}
+                      </span>
+                    )}
+                    {refineStatus && refineStatus.status === 'done' && <span className="text-xs text-green-400">✅ Complete</span>}
+                    {refining && !refineStatus && <span className="text-xs text-yellow-500 animate-pulse">Starting...</span>}
                   </label>
+                  {refineStatus?.agentId && (
+                    <span className="text-xs text-muted-foreground">🤖 {refineStatus.agentId}</span>
+                  )}
                   <Button variant="outline" size="sm" disabled={refining || !assignee}
                     onClick={async () => {
                       setRefining(true);
@@ -615,6 +650,39 @@ export function TaskSheet({ taskId, mode, open, onOpenChange, onSaved, defaultSt
                   <div className="px-4 py-2 bg-red-500/10 border-b border-red-500/20">
                     <p className="text-sm text-red-400">❌ {refineError}</p>
                     <button className="text-xs text-red-300 underline mt-1" onClick={() => setRefineError(null)}>Dismiss</button>
+                  </div>
+                )}
+
+                {/* Refinement status display */}
+                {refineStatus && (refineStatus.status === 'pending' || refineStatus.status === 'spawned' || refineStatus.status === 'running' || refineStatus.status === 'done') && (
+                  <div className="px-4 py-3 border-b bg-background/50 space-y-2">
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                      {refineStatus.startedAt && (
+                        <span>Started: {new Date(refineStatus.startedAt).toLocaleTimeString()}</span>
+                      )}
+                      {refineStatus.completedAt && (
+                        <span>Completed: {new Date(refineStatus.completedAt).toLocaleTimeString()}</span>
+                      )}
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                        refineStatus.status === 'done' ? 'bg-green-500/20 text-green-400' :
+                        refineStatus.status === 'pending' ? 'bg-yellow-500/20 text-yellow-400' :
+                        'bg-blue-500/20 text-blue-400'
+                      }`}>
+                        {refineStatus.status}
+                      </span>
+                    </div>
+                    {(refineStatus.status === 'pending' || refineStatus.status === 'spawned' || refineStatus.status === 'running') && (
+                      <div className="bg-background/50 rounded p-3 font-mono text-xs text-foreground/60">
+                        <div className="flex items-center gap-2 mb-1">
+                          <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+                          <span>Agent is analyzing and refining the task...</span>
+                        </div>
+                        <p className="text-foreground/40">The refinement agent is processing requirements and generating structured analysis.</p>
+                        {refineStatus.sessionKey && (
+                          <p className="mt-2 text-foreground/30">Session: {refineStatus.sessionKey}</p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
 
