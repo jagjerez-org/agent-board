@@ -298,7 +298,26 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
     
     es.onmessage = (event) => {
       try {
-        const entry: LogEntry = JSON.parse(event.data);
+        const data = JSON.parse(event.data);
+        
+        // Handle tmux fullContent (initial load or output update)
+        if (data.fullContent !== undefined) {
+          const lines = data.fullContent.split('\n').filter((l: string) => l.trim());
+          const entries: LogEntry[] = lines.map((line: string) => ({
+            type: 'stdout' as const,
+            message: line,
+            timestamp: data.timestamp,
+          }));
+          setLogs(prev => {
+            const updated = new Map(prev);
+            updated.set(key, entries.slice(-1000));
+            return updated;
+          });
+          return;
+        }
+        
+        // Handle individual log entries (system messages, etc.)
+        const entry: LogEntry = data;
         setLogs(prev => {
           const updated = new Map(prev);
           const entries = [...(updated.get(key) || []), entry];

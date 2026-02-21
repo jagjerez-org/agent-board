@@ -1,400 +1,264 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { spawn, execSync } from 'child_process';
+import { execSync, spawn } from 'child_process';
 import { getRepoPath, getWorktreeForBranch } from '@/lib/worktree-service';
 import { resolveProjectId } from '@/lib/project-resolver';
-import fs from 'fs/promises';
-import path from 'path';
 
-interface LogCommand {
-  id: string;
-  project: string;
-  branch: string;
-  command: string;
-  pid: number;
-  status: 'running' | 'completed' | 'error';
-  startedAt: string;
-  exitCode?: number;
+/**
+ * Tmux-backed console sessions for worktrees.
+ * Sessions survive agent-board restarts because tmux runs independently.
+ *
+ * Naming convention: ab_<project>_<branch>_<consoleId>
+ * (sanitized to alphanumeric + underscore)
+ */
+
+function sanitize(s: string): string {
+  return s.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 40);
 }
 
-const COMMANDS_FILE = path.join(process.cwd(), 'data', 'worktree-commands.json');
-
-// Ensure data directory exists
-async function ensureDataDir() {
-  const dataDir = path.dirname(COMMANDS_FILE);
-  await fs.mkdir(dataDir, { recursive: true });
+function tmuxSessionName(project: string, branch: string, consoleId?: string): string {
+  const base = `ab_${sanitize(project)}_${sanitize(branch)}`;
+  return consoleId ? `${base}_${sanitize(consoleId)}` : `${base}_default`;
 }
 
-// Load commands from JSON file
-async function loadCommands(): Promise<LogCommand[]> {
+function tmuxSessionExists(name: string): boolean {
   try {
-    const content = await fs.readFile(COMMANDS_FILE, 'utf8');
-    return JSON.parse(content);
-  } catch (error) {
+    execSync(`tmux has-session -t ${name} 2>/dev/null`);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function createTmuxSession(name: string, cwd: string): void {
+  execSync(`tmux new-session -d -s ${name} -c "${cwd}"`, { timeout: 5000 });
+}
+
+function captureTmuxPane(name: string, lines = 2000): string {
+  try {
+    return execSync(`tmux capture-pane -t ${name} -p -S -${lines}`, {
+      timeout: 5000,
+      maxBuffer: 5 * 1024 * 1024,
+    }).toString();
+  } catch {
+    return '';
+  }
+}
+
+function sendTmuxKeys(name: string, command: string): void {
+  // Send command + Enter to the tmux session
+  execSync(`tmux send-keys -t ${name} ${JSON.stringify(command)} Enter`, { timeout: 5000 });
+}
+
+function killTmuxSession(name: string): void {
+  try {
+    execSync(`tmux kill-session -t ${name} 2>/dev/null`, { timeout: 5000 });
+  } catch { /* session may already be gone */ }
+}
+
+function listTmuxSessions(prefix: string): string[] {
+  try {
+    const output = execSync(`tmux list-sessions -F "#{session_name}" 2>/dev/null`, { timeout: 5000 }).toString();
+    return output.split('\n').filter(s => s.startsWith(prefix));
+  } catch {
     return [];
   }
 }
 
-// Save commands to JSON file
-async function saveCommands(commands: LogCommand[]) {
-  await ensureDataDir();
-  await fs.writeFile(COMMANDS_FILE, JSON.stringify(commands, null, 2));
+// SSE subscribers per session
+const subscribers = new Map<string, Set<ReadableStreamDefaultController>>();
+// Polling intervals per session
+const pollers = new Map<string, NodeJS.Timeout>();
+// Last known content per session (to detect changes)
+const lastContent = new Map<string, string>();
+
+function startPolling(sessionName: string) {
+  if (pollers.has(sessionName)) return;
+
+  const interval = setInterval(() => {
+    const subs = subscribers.get(sessionName);
+    if (!subs || subs.size === 0) {
+      // No subscribers, stop polling
+      clearInterval(interval);
+      pollers.delete(sessionName);
+      lastContent.delete(sessionName);
+      return;
+    }
+
+    if (!tmuxSessionExists(sessionName)) return;
+
+    const content = captureTmuxPane(sessionName, 200);
+    const prev = lastContent.get(sessionName) || '';
+
+    if (content !== prev) {
+      lastContent.set(sessionName, content);
+
+      // Find new lines
+      const prevLines = prev.split('\n');
+      const currentLines = content.split('\n');
+
+      // Simple diff: send lines that are new at the end
+      let newLines: string[];
+      if (currentLines.length > prevLines.length) {
+        newLines = currentLines.slice(prevLines.length);
+      } else if (content !== prev) {
+        // Content changed but same length — full refresh
+        newLines = currentLines;
+      } else {
+        return;
+      }
+
+      const encoder = new TextEncoder();
+      const payload = encoder.encode(`data: ${JSON.stringify({
+        type: 'output',
+        lines: newLines,
+        fullContent: content,
+        timestamp: new Date().toISOString(),
+      })}\n\n`);
+
+      subs.forEach(controller => {
+        try { controller.enqueue(payload); } catch { /* dead connection */ }
+      });
+    }
+  }, 500); // Poll every 500ms
+
+  pollers.set(sessionName, interval);
 }
 
-// Global log service instance
-class LogService {
-  private static instance: LogService;
-  private processes: Map<string, {
-    process: any;
-    buffer: string[];
-    subscribers: Set<ReadableStreamDefaultController>;
-    command: LogCommand;
-  }> = new Map();
+// GET /api/git/worktrees/logs — SSE stream of tmux output
+export async function GET(request: NextRequest) {
+  try {
+    const params = request.nextUrl.searchParams;
+    const rawProject = params.get('project');
+    const branch = params.get('branch');
+    const consoleId = params.get('consoleId');
 
-  static getInstance(): LogService {
-    if (!LogService.instance) {
-      LogService.instance = new LogService();
+    if (!rawProject || !branch) {
+      return NextResponse.json({ error: 'project and branch required' }, { status: 400 });
     }
-    return LogService.instance;
-  }
 
-  private getProcessKey(project: string, branch: string, commandId?: string): string {
-    return commandId ? `${project}:${branch}:${commandId}` : `${project}:${branch}:preview`;
-  }
+    const project = await resolveProjectId(rawProject);
+    const sessionName = tmuxSessionName(project, branch, consoleId || undefined);
 
-  addProcess(key: string, process: any, command: LogCommand) {
-    // Carry over existing subscribers (SSE connections opened before this process started)
-    const existingSubscribers = this.processes.get(key)?.subscribers || new Set<ReadableStreamDefaultController>();
-    
-    const processData = {
-      process,
-      buffer: [] as string[],
-      subscribers: existingSubscribers,
-      command
-    };
+    // If tmux session exists, send initial buffer
+    const initialContent = tmuxSessionExists(sessionName) ? captureTmuxPane(sessionName) : '';
 
-    this.processes.set(key, processData);
-
-    // Handle stdout
-    process.stdout?.on('data', (data: Buffer) => {
-      const lines = data.toString().split('\n').filter(Boolean);
-      lines.forEach(line => {
-        const logEntry = `${new Date().toISOString()} [OUT] ${line}`;
-        processData.buffer.push(logEntry);
-        
-        // Keep only last 1000 lines
-        if (processData.buffer.length > 1000) {
-          processData.buffer.shift();
-        }
-        
-        // Send to subscribers
-        processData.subscribers.forEach(controller => {
-          try {
-            const encoder = new TextEncoder();
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'stdout', message: line, timestamp: new Date().toISOString() })}\n\n`));
-          } catch (error) {
-            console.warn('Error sending to subscriber:', error);
-          }
-        });
-      });
-    });
-
-    // Handle stderr
-    process.stderr?.on('data', (data: Buffer) => {
-      const lines = data.toString().split('\n').filter(Boolean);
-      lines.forEach(line => {
-        const logEntry = `${new Date().toISOString()} [ERR] ${line}`;
-        processData.buffer.push(logEntry);
-        
-        // Keep only last 1000 lines
-        if (processData.buffer.length > 1000) {
-          processData.buffer.shift();
-        }
-        
-        // Send to subscribers
-        processData.subscribers.forEach(controller => {
-          try {
-            const encoder = new TextEncoder();
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'stderr', message: line, timestamp: new Date().toISOString() })}\n\n`));
-          } catch (error) {
-            console.warn('Error sending to subscriber:', error);
-          }
-        });
-      });
-    });
-
-    // Handle process exit
-    process.on('exit', (code: number) => {
-      processData.command.status = 'completed';
-      processData.command.exitCode = code;
-      
-      const exitMessage = `Process exited with code ${code}`;
-      const logEntry = `${new Date().toISOString()} [SYS] ${exitMessage}`;
-      processData.buffer.push(logEntry);
-      
-      // Notify subscribers
-      processData.subscribers.forEach(controller => {
-        try {
-          const encoder = new TextEncoder();
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'system', message: exitMessage, timestamp: new Date().toISOString(), exitCode: code })}\n\n`));
-        } catch (error) {
-          console.warn('Error sending exit notification:', error);
-        }
-      });
-
-      // Update commands file
-      this.updateCommand(processData.command);
-    });
-
-    // Handle process error
-    process.on('error', (error: Error) => {
-      processData.command.status = 'error';
-      
-      const errorMessage = `Process error: ${error.message}`;
-      const logEntry = `${new Date().toISOString()} [ERR] ${errorMessage}`;
-      processData.buffer.push(logEntry);
-      
-      // Notify subscribers
-      processData.subscribers.forEach(controller => {
-        try {
-          const encoder = new TextEncoder();
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'error', message: errorMessage, timestamp: new Date().toISOString() })}\n\n`));
-        } catch (error) {
-          console.warn('Error sending error notification:', error);
-        }
-      });
-
-      // Update commands file
-      this.updateCommand(processData.command);
-    });
-
-    return processData;
-  }
-
-  subscribe(key: string): ReadableStream<Uint8Array> {
-    const processData = this.processes.get(key);
     let currentController: ReadableStreamDefaultController<Uint8Array> | null = null;
-    
-    return new ReadableStream({
+
+    const stream = new ReadableStream<Uint8Array>({
       start(controller) {
         currentController = controller;
-        
-        if (processData) {
-          // Send existing buffer
-          processData.buffer.forEach(line => {
-            const [timestamp, levelAndMessage] = line.split(' ', 2);
-            const level = levelAndMessage.slice(1, 4);
-            const message = levelAndMessage.slice(5);
-            
-            let type = 'stdout';
-            if (level === 'ERR') type = 'stderr';
-            else if (level === 'SYS') type = 'system';
-            
-            const encoder = new TextEncoder();
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type, message, timestamp })}\n\n`));
-          });
-          
-          // Add to subscribers
-          processData.subscribers.add(controller);
+        const encoder = new TextEncoder();
+
+        // Send initial content
+        if (initialContent) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+            type: 'initial',
+            fullContent: initialContent,
+            timestamp: new Date().toISOString(),
+          })}\n\n`));
+          lastContent.set(sessionName, initialContent);
         } else {
-          // No active process — create a placeholder entry so future processes pick up this subscriber
-          const placeholder = {
-            process: null,
-            buffer: [] as string[],
-            subscribers: new Set<ReadableStreamDefaultController>(),
-            command: null as unknown as LogCommand,
-          };
-          placeholder.subscribers.add(controller);
-          logService['processes'].set(key, placeholder);
-          
-          const encoder = new TextEncoder();
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'system', message: 'Waiting for commands...', timestamp: new Date().toISOString() })}\n\n`));
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+            type: 'system',
+            message: 'Console ready. Run a command to start.',
+            timestamp: new Date().toISOString(),
+          })}\n\n`));
+        }
+
+        // Register subscriber
+        if (!subscribers.has(sessionName)) {
+          subscribers.set(sessionName, new Set());
+        }
+        subscribers.get(sessionName)!.add(controller);
+
+        // Start polling if tmux session exists
+        if (tmuxSessionExists(sessionName)) {
+          startPolling(sessionName);
         }
       },
       cancel() {
-        // Remove from subscribers
-        if (processData && currentController) {
-          processData.subscribers.delete(currentController);
+        if (currentController) {
+          const subs = subscribers.get(sessionName);
+          if (subs) {
+            subs.delete(currentController);
+            if (subs.size === 0) subscribers.delete(sessionName);
+          }
         }
-      }
+      },
     });
-  }
 
-  getBuffer(key: string): string[] {
-    const processData = this.processes.get(key);
-    return processData?.buffer || [];
-  }
-
-  private async updateCommand(command: LogCommand) {
-    try {
-      const commands = await loadCommands();
-      const index = commands.findIndex(c => c.id === command.id);
-      if (index >= 0) {
-        commands[index] = command;
-        await saveCommands(commands);
-      }
-    } catch (error) {
-      console.error('Error updating command:', error);
-    }
-  }
-
-  // Find preview server process from the preview API
-  async findPreviewProcess(project: string, branch: string) {
-    try {
-      const serversFile = path.join(process.cwd(), 'data', 'worktree-servers.json');
-      const content = await fs.readFile(serversFile, 'utf8');
-      const servers = JSON.parse(content);
-      const server = servers[project]?.find((s: any) => s.branch === branch && s.status === 'running');
-      return server;
-    } catch (error) {
-      return null;
-    }
-  }
-}
-
-const logService = LogService.getInstance();
-
-// GET /api/git/worktrees/logs - Stream logs via SSE
-export async function GET(request: NextRequest) {
-  try {
-    const searchParams = request.nextUrl.searchParams;
-    const rawProject = searchParams.get('project');
-    const branch = searchParams.get('branch');
-    const commandId = searchParams.get('commandId');
-    
-    if (!rawProject || !branch) {
-      return NextResponse.json(
-        { error: 'Project and branch parameters are required' },
-        { status: 400 }
-      );
-    }
-
-    const consoleId = searchParams.get('consoleId');
-    const project = await resolveProjectId(rawProject);
-    const key = consoleId 
-      ? `${project}:${branch}:${consoleId}`
-      : logService['getProcessKey'](project, branch, commandId || undefined);
-    const stream = logService.subscribe(key);
-    
     return new NextResponse(stream, {
       headers: {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache, no-transform',
         'Connection': 'keep-alive',
         'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
       },
     });
   } catch (error) {
     console.error('Error in GET /api/git/worktrees/logs:', error);
-    return NextResponse.json(
-      { error: 'Failed to stream logs' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to stream logs' }, { status: 500 });
   }
 }
 
-// POST /api/git/worktrees/logs - Run a command and stream output
+// POST /api/git/worktrees/logs — Run command in tmux session
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { project: rawProject, branch, command, consoleId } = body;
-    
+
     if (!rawProject || !branch || !command) {
-      return NextResponse.json(
-        { error: 'Project, branch, and command parameters are required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'project, branch, and command required' }, { status: 400 });
     }
-    
+
     const project = await resolveProjectId(rawProject);
-    // Get repository path
     const repoPath = await getRepoPath(project);
     if (!repoPath) {
-      return NextResponse.json(
-        { error: `Repository not found for project: ${project}` },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: `Repository not found: ${project}` }, { status: 404 });
     }
-    
-    // Get worktree for branch
+
     const worktree = await getWorktreeForBranch(repoPath, branch);
     if (!worktree) {
-      return NextResponse.json(
-        { error: `No worktree found for branch: ${branch}` },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: `No worktree for branch: ${branch}` }, { status: 404 });
     }
-    
-    // Generate command ID
-    const commandId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    
-    // Create command entry
-    const logCommand: LogCommand = {
-      id: commandId,
-      project,
-      branch,
-      command,
-      pid: 0, // Will be set after spawn
-      status: 'running',
-      startedAt: new Date().toISOString()
-    };
-    
-    // Extend PATH with common tool locations
-    const homeDir = process.env.HOME || '/root';
-    const extraPaths = [
-      `${homeDir}/flutter/bin`,
-      `${homeDir}/.pub-cache/bin`,
-      `${homeDir}/.npm-global/bin`,
-      `${homeDir}/.local/bin`,
-      '/usr/local/bin',
-    ].join(':');
-    // Remove Agent Board's PORT to avoid polluting child processes
-    const { PORT: _port, ...cleanEnv } = process.env;
-    const env = { ...cleanEnv, NODE_ENV: 'development', PATH: `${extraPaths}:${process.env.PATH}` };
-    
-    // Spawn the command in its own process group so we can kill the whole tree
-    const childProcess = spawn('bash', ['-c', command], {
-      cwd: worktree.path,
-      detached: true,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: env as NodeJS.ProcessEnv
-    });
-    
-    if (!childProcess.pid) {
-      return NextResponse.json(
-        { error: 'Failed to spawn command process' },
-        { status: 500 }
-      );
+
+    const sessionName = tmuxSessionName(project, branch, consoleId || undefined);
+
+    // Create tmux session if it doesn't exist
+    if (!tmuxSessionExists(sessionName)) {
+      createTmuxSession(sessionName, worktree.path);
+      // Set up environment
+      const homeDir = process.env.HOME || '/root';
+      const extraPaths = [
+        `${homeDir}/flutter/bin`,
+        `${homeDir}/.pub-cache/bin`,
+        `${homeDir}/.npm-global/bin`,
+        `${homeDir}/.local/bin`,
+        '/usr/local/bin',
+      ].join(':');
+      sendTmuxKeys(sessionName, `export PATH="${extraPaths}:$PATH"`);
+      // Small delay for the export to take effect
+      await new Promise(r => setTimeout(r, 200));
     }
-    
-    logCommand.pid = childProcess.pid;
-    
-    // Save command
-    const commands = await loadCommands();
-    commands.push(logCommand);
-    await saveCommands(commands);
-    
-    // Use consoleId key if provided, otherwise branch-level key
-    const key = consoleId 
-      ? `${project}:${branch}:${consoleId}`
-      : logService['getProcessKey'](project, branch);
-    logService.addProcess(key, childProcess, logCommand);
-    
+
+    // Send command
+    sendTmuxKeys(sessionName, command);
+
+    // Ensure polling is running
+    startPolling(sessionName);
+
     return NextResponse.json({
       success: true,
-      commandId,
-      message: `Command started: ${command}`
+      session: sessionName,
+      message: `Command sent: ${command}`,
     });
   } catch (error) {
     console.error('Error in POST /api/git/worktrees/logs:', error);
-    return NextResponse.json(
-      { error: 'Failed to start command' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to run command' }, { status: 500 });
   }
 }
-// DELETE /api/git/worktrees/logs - Kill running process for a branch
+
+// DELETE /api/git/worktrees/logs — Kill tmux session
 export async function DELETE(request: NextRequest) {
   try {
     const body = await request.json();
@@ -405,43 +269,35 @@ export async function DELETE(request: NextRequest) {
     }
 
     const project = await resolveProjectId(rawProject);
-    const key = consoleId 
-      ? `${project}:${branch}:${consoleId}`
-      : logService['getProcessKey'](project, branch);
-    const processData = logService['processes'].get(key);
+    const sessionName = tmuxSessionName(project, branch, consoleId || undefined);
 
-    if (!processData?.process?.pid) {
-      return NextResponse.json({ error: 'No running process found' }, { status: 404 });
+    if (!tmuxSessionExists(sessionName)) {
+      return NextResponse.json({ error: 'No active session found' }, { status: 404 });
     }
 
-    const pid = processData.process.pid;
-    // Kill entire process tree aggressively
-    try {
-      // Kill process group (works because we spawn with detached: true)
-      execSync(`kill -TERM -${pid} 2>/dev/null; sleep 0.5; kill -9 -${pid} 2>/dev/null`, { timeout: 5000 });
-    } catch { /* ignore */ }
-    // Also kill all descendants via pgrep tree walk
-    try {
-      execSync(`pids=$(pgrep -P ${pid} 2>/dev/null); while [ -n "$pids" ]; do for p in $pids; do kill -9 $p 2>/dev/null; done; pids=$(for p in $pids; do pgrep -P $p 2>/dev/null; done); done`, { timeout: 5000 });
-    } catch { /* ignore */ }
-    try { process.kill(-pid, 'SIGKILL'); } catch { /* ignore */ }
-    try { process.kill(pid, 'SIGKILL'); } catch { /* ignore */ }
+    // Notify subscribers
+    const subs = subscribers.get(sessionName);
+    if (subs) {
+      const encoder = new TextEncoder();
+      const payload = encoder.encode(`data: ${JSON.stringify({
+        type: 'system',
+        message: 'Session killed by user',
+        timestamp: new Date().toISOString(),
+      })}\n\n`);
+      subs.forEach(c => { try { c.enqueue(payload); c.close(); } catch {} });
+      subscribers.delete(sessionName);
+    }
 
-    // Notify subscribers once, then close SSE connections
-    const encoder = new TextEncoder();
-    processData.subscribers.forEach((controller: ReadableStreamDefaultController) => {
-      try {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'system', message: 'Process killed by user', timestamp: new Date().toISOString() })}\n\n`));
-        controller.close();
-      } catch { /* ignore */ }
-    });
+    // Clean up polling
+    const poller = pollers.get(sessionName);
+    if (poller) { clearInterval(poller); pollers.delete(sessionName); }
+    lastContent.delete(sessionName);
 
-    // Remove process from map so subsequent DELETE calls get 404
-    logService['processes'].delete(key);
+    killTmuxSession(sessionName);
 
-    return NextResponse.json({ success: true, message: 'Process killed' });
+    return NextResponse.json({ success: true, message: 'Session killed' });
   } catch (error) {
     console.error('Error in DELETE /api/git/worktrees/logs:', error);
-    return NextResponse.json({ error: 'Failed to kill process' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to kill session' }, { status: 500 });
   }
 }
