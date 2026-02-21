@@ -223,6 +223,8 @@ function EditorPageContent() {
   const [sidebarTab, setSidebarTab] = useState<'files' | 'git'>('files');
   const [diffView, setDiffView] = useState<{ file: string; original: string; modified: string; language: string } | null>(null);
   const editorRef = useRef<any>(null);
+  const monacoRef = useRef<Monaco | null>(null);
+  const loadedTypesRef = useRef<Set<string>>(new Set());
 
   // Quick Open (Ctrl+P)
   const [quickOpenVisible, setQuickOpenVisible] = useState(false);
@@ -288,6 +290,10 @@ function EditorPageContent() {
         const language = getLanguageFromExtension(filePath.split('/').pop() || '');
         setOpenFiles(prev => [...prev, { path: filePath, content: data.content, originalContent: data.content, language, isUnsaved: false }]);
         setActiveFile(filePath);
+        // Load types for imports in this file
+        if (language === 'typescript' || language === 'typescriptreact' || language === 'javascript' || language === 'javascriptreact') {
+          loadTypesForContent(data.content);
+        }
       } else { setError(data.isBinary ? 'Cannot open binary file' : (data.error || 'Failed')); }
     } catch { setError('Network error'); }
   };
@@ -456,6 +462,41 @@ function EditorPageContent() {
   useEffect(() => { if (quickOpenVisible) setTimeout(() => quickOpenRef.current?.focus(), 50); }, [quickOpenVisible]);
   useEffect(() => { if (globalSearchVisible) setTimeout(() => globalSearchRef.current?.focus(), 50); }, [globalSearchVisible]);
 
+  // Load type definitions for imports in the current file
+  const loadTypesForContent = useCallback(async (content: string) => {
+    if (!monacoRef.current || !projectPath) return;
+    
+    // Extract package names from imports
+    const importRegex = /(?:import|from)\s+['"]([^'"./][^'"]*)['"]/g;
+    const packages = new Set<string>();
+    let match;
+    while ((match = importRegex.exec(content)) !== null) {
+      let pkg = match[1];
+      // Handle scoped packages: @scope/pkg/subpath -> @scope/pkg
+      if (pkg.startsWith('@')) {
+        const parts = pkg.split('/');
+        pkg = parts.slice(0, 2).join('/');
+      } else {
+        pkg = pkg.split('/')[0];
+      }
+      if (!loadedTypesRef.current.has(pkg)) packages.add(pkg);
+    }
+
+    if (packages.size === 0) return;
+
+    try {
+      const r = await fetch(`/api/files/types?path=${encodeURIComponent(projectPath)}&packages=${encodeURIComponent([...packages].join(','))}`);
+      if (!r.ok) return;
+      const data = await r.json();
+      const monaco = monacoRef.current;
+      for (const file of data.files || []) {
+        monaco.languages.typescript.typescriptDefaults.addExtraLib(file.content, file.path);
+        monaco.languages.typescript.javascriptDefaults.addExtraLib(file.content, file.path);
+      }
+      for (const pkg of packages) loadedTypesRef.current.add(pkg);
+    } catch { /* silent */ }
+  }, [projectPath]);
+
   const handleGlobalSearch = async () => {
     if (!globalSearchQuery || !projectPath) return;
     setGlobalSearchLoading(true);
@@ -476,16 +517,15 @@ function EditorPageContent() {
 
   const handleEditorMount = (editor: any, monaco: Monaco) => {
     editorRef.current = editor;
-    // Disable semantic validation (imports, types) since Monaco can't resolve node_modules
-    // Keep syntax validation for catching typos
-    monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({ noSemanticValidation: true, noSyntaxValidation: false });
+    monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({ noSemanticValidation: false, noSyntaxValidation: false });
     monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
       target: monaco.languages.typescript.ScriptTarget.ESNext, module: monaco.languages.typescript.ModuleKind.ESNext,
       moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
       allowNonTsExtensions: true, jsx: monaco.languages.typescript.JsxEmit.ReactJSX,
-      allowJs: true, checkJs: false, strict: false, esModuleInterop: true, skipLibCheck: true,
+      allowJs: true, checkJs: true, strict: true, esModuleInterop: true, skipLibCheck: true,
     });
-    monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({ noSemanticValidation: true, noSyntaxValidation: false });
+    monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({ noSemanticValidation: false, noSyntaxValidation: false });
+    monacoRef.current = monaco;
     editor.focus();
   };
 
