@@ -23,7 +23,7 @@ Use `cron add` with:
 - `schedule`: `{"kind": "every", "everyMs": 120000}`
 - `sessionTarget`: `"isolated"`
 - `delivery`: `{"mode": "none"}`
-- `payload`: `{"kind": "agentTurn", "message": "Run: bash /home/jarvis/.openclaw/workspace/skills/agent-board/scripts/watchdog.sh — if output contains 'Restarting', report to user. Otherwise reply OK.", "timeoutSeconds": 30}`
+- `payload`: `{"kind": "agentTurn", "message": "Run: bash $HOME/.openclaw/workspace/skills/agent-board/scripts/watchdog.sh — if output contains 'Restarting', report to user. Otherwise reply OK.", "timeoutSeconds": 30}`
 
 Before creating, check `cron list` for existing `watchdog:agent-board`. Update if exists, create if not.
 

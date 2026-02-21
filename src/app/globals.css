@@ -152,3 +152,50 @@
   content: attr(data-placeholder);
   @apply text-muted-foreground/50 float-left h-0 pointer-events-none;
 }
+
+/* Kanban Board Scrollbar Styling */
+.kanban-scrollbar {
+  /* Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.kanban-scrollbar:hover {
+  /* Firefox */
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+}
+
+/* WebKit browsers */
+.kanban-scrollbar::-webkit-scrollbar {
+  height: 6px;
+}
+
+.kanban-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.kanban-scrollbar::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 3px;
+}
+
+.kanban-scrollbar:hover::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.kanban-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+/* Dark mode */
+.dark .kanban-scrollbar:hover {
+  scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+}
+
+.dark .kanban-scrollbar:hover::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.dark .kanban-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.4);
+}

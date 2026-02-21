@@ -6,7 +6,15 @@ import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { useBoardEvents, BoardEvent } from '@/hooks/use-board-events';
 import { TaskSheet } from './task-sheet';
 import { Button } from '@/components/ui/button';
-import { Plus } from 'lucide-react';
+import { Plus, Settings, Eye, EyeOff } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuCheckboxItem,
+} from '@/components/ui/dropdown-menu';
 
 interface TasksByStatus {
   [key: string]: Task[];
@@ -22,6 +30,16 @@ const COLUMN_CONFIG: Record<TaskStatus, { icon: string; label: string }> = {
   done: { icon: '✅', label: 'Done' },
   production: { icon: '🚀', label: 'Production' },
 };
+
+// Default visible columns (excludes pending_approval and production)
+const DEFAULT_VISIBLE_COLUMNS: TaskStatus[] = [
+  'backlog',
+  'refinement', 
+  'todo',
+  'in_progress',
+  'review',
+  'done'
+];
 
 interface KanbanBoardProps {
   projectId?: string;
@@ -46,6 +64,9 @@ export function KanbanBoard({ projectId, onCreateRef }: KanbanBoardProps = {}) {
 
   // Execution state — track which tasks are being worked on by agents
   const [executingTasks, setExecutingTasks] = useState<Set<string>>(new Set());
+  
+  // Column visibility state
+  const [visibleColumns, setVisibleColumns] = useState<TaskStatus[]>(DEFAULT_VISIBLE_COLUMNS);
 
   const dragCounters = useRef<Record<string, number>>({});
 
@@ -59,7 +80,52 @@ export function KanbanBoard({ projectId, onCreateRef }: KanbanBoardProps = {}) {
       .catch(() => { setError('Failed to load'); setLoading(false); });
   }, [projectId]);
 
-  useEffect(() => { loadTasks(); }, [loadTasks]);
+  // Column visibility persistence
+  const getStorageKey = (projectId?: string) => 
+    `board-visible-columns${projectId ? `-${projectId}` : ''}`;
+
+  const loadVisibleColumns = useCallback(() => {
+    try {
+      const stored = localStorage.getItem(getStorageKey(projectId));
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          setVisibleColumns(parsed.filter(col => TASK_STATUSES.includes(col)));
+          return;
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to load column visibility preferences:', error);
+    }
+    setVisibleColumns(DEFAULT_VISIBLE_COLUMNS);
+  }, [projectId]);
+
+  const saveVisibleColumns = useCallback((columns: TaskStatus[]) => {
+    try {
+      localStorage.setItem(getStorageKey(projectId), JSON.stringify(columns));
+    } catch (error) {
+      console.warn('Failed to save column visibility preferences:', error);
+    }
+  }, [projectId]);
+
+  const toggleColumnVisibility = useCallback((status: TaskStatus) => {
+    setVisibleColumns(prev => {
+      const newColumns = prev.includes(status)
+        ? prev.filter(col => col !== status)
+        : [...prev, status];
+      
+      // Sort by original TASK_STATUSES order
+      const sortedColumns = TASK_STATUSES.filter(col => newColumns.includes(col));
+      
+      saveVisibleColumns(sortedColumns);
+      return sortedColumns;
+    });
+  }, [saveVisibleColumns]);
+
+  useEffect(() => { 
+    loadTasks();
+    loadVisibleColumns();
+  }, [loadTasks, loadVisibleColumns]);
 
   // Poll execution status for in_progress tasks
   useEffect(() => {
@@ -226,15 +292,41 @@ export function KanbanBoard({ projectId, onCreateRef }: KanbanBoardProps = {}) {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Connection status */}
-      <div className="flex items-center gap-2 px-4 py-1 text-xs text-muted-foreground border-b">
-        <span className={`inline-block w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-yellow-500 animate-pulse'}`} />
-        {connected ? 'Live' : 'Connecting...'}
+      {/* Connection status and controls */}
+      <div className="flex items-center justify-between px-4 py-1 text-xs text-muted-foreground border-b">
+        <div className="flex items-center gap-2">
+          <span className={`inline-block w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-yellow-500 animate-pulse'}`} />
+          {connected ? 'Live' : 'Connecting...'}
+        </div>
+        
+        {/* Column visibility toggle */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm" className="h-6 px-2 text-xs">
+              <Eye className="w-3 h-3 mr-1" />
+              Columns
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuLabel>Visible Columns</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {TASK_STATUSES.map(status => (
+              <DropdownMenuCheckboxItem
+                key={status}
+                checked={visibleColumns.includes(status)}
+                onCheckedChange={() => toggleColumnVisibility(status)}
+              >
+                <span className="mr-2">{COLUMN_CONFIG[status].icon}</span>
+                {COLUMN_CONFIG[status].label}
+              </DropdownMenuCheckboxItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Board columns */}
-      <div className="flex flex-1 overflow-x-auto p-4 gap-3" style={{ minWidth: 0 }}>
-        {TASK_STATUSES.map(status => {
+      <div className="flex flex-1 overflow-x-auto p-4 gap-3 kanban-scrollbar" style={{ minWidth: 0 }}>
+        {visibleColumns.map(status => {
           const col = COLUMN_CONFIG[status];
           const tasks = tasksByStatus[status] || [];
           const isOver = dragOverColumn === status && dragTaskId !== null;
