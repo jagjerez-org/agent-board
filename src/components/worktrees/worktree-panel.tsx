@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import AnsiToHtml from 'ansi-to-html';
 import { Project } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -594,6 +595,7 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
   const commonCommands = ['pnpm build', 'pnpm test', 'pnpm lint', 'git status', 'git log --oneline -10'];
 
   const stripAnsi = (s: string) => s.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '');
+  const ansiConverter = useMemo(() => new AnsiToHtml({ fg: '#d4d4d4', bg: '#0a0a0a', newline: false, escapeXML: true }), []);
 
   return (
     <div className="space-y-6">
@@ -1042,7 +1044,7 @@ export function WorktreePanel({ projectId, onProjectChange, onWorktreesChange }:
                                         entry.type === 'system' ? 'text-blue-400' :
                                         entry.type === 'error' ? 'text-red-400' : 'text-gray-200'
                                       }>
-                                        {entry.type === 'system' ? `[${entry.message}]` : stripAnsi(entry.message)}
+                                        {entry.type === 'system' ? `[${entry.message}]` : <span dangerouslySetInnerHTML={{ __html: ansiConverter.toHtml(entry.message) }} />}
                                       </span>
                                       {entry.exitCode !== undefined && (
                                         <Badge variant={entry.exitCode === 0 ? "default" : "destructive"} className="ml-2 text-[10px]">

@@ -35,7 +35,7 @@ function createTmuxSession(name: string, cwd: string): void {
 
 function captureTmuxPane(name: string, lines = 2000): string {
   try {
-    return execSync(`tmux capture-pane -t ${name} -p -S -${lines}`, {
+    return execSync(`tmux capture-pane -t ${name} -p -e -S -${lines}`, {
       timeout: 5000,
       maxBuffer: 5 * 1024 * 1024,
     }).toString();
@@ -227,7 +227,7 @@ export async function POST(request: NextRequest) {
     // Create tmux session if it doesn't exist
     if (!tmuxSessionExists(sessionName)) {
       createTmuxSession(sessionName, worktree.path);
-      // Set up environment
+      // Set up environment silently
       const homeDir = process.env.HOME || '/root';
       const extraPaths = [
         `${homeDir}/flutter/bin`,
@@ -236,9 +236,18 @@ export async function POST(request: NextRequest) {
         `${homeDir}/.local/bin`,
         '/usr/local/bin',
       ].join(':');
-      sendTmuxKeys(sessionName, `export PATH="${extraPaths}:$PATH"`);
-      // Small delay for the export to take effect
-      await new Promise(r => setTimeout(r, 200));
+      // Source .env.local if it exists, set PATH, then clear the screen so init commands don't show
+      const initCmds = [
+        `export PATH="${extraPaths}:$PATH"`,
+        `[ -f .env.local ] && set -a && source .env.local && set +a`,
+        `[ -f .env ] && set -a && source .env && set +a`,
+        `clear`,
+      ];
+      for (const cmd of initCmds) {
+        sendTmuxKeys(sessionName, cmd);
+      }
+      // Wait for init to complete
+      await new Promise(r => setTimeout(r, 500));
     }
 
     // Send command
