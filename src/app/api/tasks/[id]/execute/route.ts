@@ -1,20 +1,16 @@
-import { getGatewayConfig } from "@/lib/gateway";
-// POST /api/tasks/[id]/execute — auto-execute a refined task
-// Moves task to in_progress, spawns agent work, on completion moves to review
+import { spawnAgent } from '@/lib/openclaw-api';
 import { NextRequest, NextResponse } from 'next/server';
-import { getTask, moveTask, updateTask } from '@/lib/task-store';
+import { getTask, moveTask } from '@/lib/task-store';
 import { eventBus } from '@/lib/event-bus';
 import { readFile, writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
-import { v4 as uuidv4 } from 'uuid';
 
 interface Props {
   params: Promise<{ id: string }>;
 }
 
 const EXEC_DIR = join(process.cwd(), 'data', 'executions');
-
 
 // GET /api/tasks/[id]/execute — poll execution status
 export async function GET(_request: NextRequest, { params }: Props) {
@@ -33,7 +29,7 @@ export async function GET(_request: NextRequest, { params }: Props) {
   }
 }
 
-// POST /api/tasks/[id]/execute — trigger execution
+// POST /api/tasks/[id]/execute — queue execution for agent processing
 export async function POST(request: NextRequest, { params }: Props) {
   try {
     const { id } = await params;
@@ -45,7 +41,7 @@ export async function POST(request: NextRequest, { params }: Props) {
       return NextResponse.json({ error: 'Task must be refined before execution' }, { status: 400 });
     }
 
-    // Move to in_progress immediately
+    // Move to in_progress
     const moved = await moveTask(id, 'in_progress');
     if (moved) {
       eventBus.emit({ type: 'task:moved', payload: moved });
@@ -57,7 +53,6 @@ export async function POST(request: NextRequest, { params }: Props) {
     const execPath = join(EXEC_DIR, `${id}.json`);
     const resultPath = join(EXEC_DIR, `${id}-result.md`);
 
-    // Build the execution prompt
     const prompt = `You are executing a development task. Complete the implementation as described.
 
 **Task:** ${task.title}
@@ -80,31 +75,43 @@ ${task.description ? `**Original Description:**\n${task.description}\n` : ''}
 
 Complete all work and file writes before finishing.`;
 
-    // Write pending status for heartbeat pickup
+    // Write spawning status
     await writeFile(execPath, JSON.stringify({
-      status: 'pending',
+      status: 'spawning',
       agentId,
       taskId: id,
-      prompt,
       startedAt: new Date().toISOString(),
     }, null, 2), 'utf8');
 
-    // Send wake event to OpenClaw to trigger immediate spawn
-    const gateway = await getGatewayConfig();
-    if (gateway) {
-      try {
-        const wakeText = `[Agent Board] Execution requested for task ${id}. Check /tmp/agent-board/data/executions/ for pending executions and spawn agents for them.`;
-        await fetch(`${gateway.url}/api/v1/cron/wake`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${gateway.token}` },
-          body: JSON.stringify({ text: wakeText, mode: 'now' }),
-        });
-      } catch (err: unknown) {
-        console.error('Wake event failed (will be picked up by heartbeat):', err);
-      }
+    // Spawn agent directly via OpenClaw HTTP API (same as refine)
+    const spawnResult = await spawnAgent({
+      task: prompt,
+      agentId,
+      label: `exec:${id.slice(0, 8)}`,
+      timeoutSeconds: 600,
+    });
+
+    if (!spawnResult.success) {
+      await writeFile(execPath, JSON.stringify({
+        status: 'error',
+        agentId,
+        taskId: id,
+        error: spawnResult.error,
+        startedAt: new Date().toISOString(),
+      }, null, 2), 'utf8');
+      return NextResponse.json({ error: spawnResult.error }, { status: 500 });
     }
 
-    return NextResponse.json({ status: 'started', agentId });
+    // Update status with session key for tracking
+    await writeFile(execPath, JSON.stringify({
+      status: 'running',
+      agentId,
+      taskId: id,
+      sessionKey: spawnResult.sessionKey,
+      startedAt: new Date().toISOString(),
+    }, null, 2), 'utf8');
+
+    return NextResponse.json({ status: 'started', agentId, sessionKey: spawnResult.sessionKey });
   } catch (error: any) {
     console.error('Execute error:', error);
     return NextResponse.json({ error: error.message || 'Failed' }, { status: 500 });
@@ -121,13 +128,11 @@ export async function PUT(request: NextRequest, { params }: Props) {
     const result = await getTask(id);
     if (!result) return NextResponse.json({ error: 'Task not found' }, { status: 404 });
 
-    // Move to review
     const moved = await moveTask(id, 'review');
     if (moved) {
       eventBus.emit({ type: 'task:moved', payload: moved });
     }
 
-    // Update execution status
     const execPath = join(EXEC_DIR, `${id}.json`);
     if (!existsSync(EXEC_DIR)) await mkdir(EXEC_DIR, { recursive: true });
     await writeFile(execPath, JSON.stringify({

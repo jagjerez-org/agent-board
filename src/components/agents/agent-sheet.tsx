@@ -19,7 +19,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Trash2, Pencil, Save, FileText, Terminal, RefreshCw } from 'lucide-react';
+import { Trash2, Pencil, Save, FileText, Terminal, RefreshCw, ChevronsRight, Maximize2, PanelRightClose } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Switch } from '@/components/ui/switch';
@@ -85,6 +86,7 @@ export function AgentSheet({ agentId, open, onOpenChange, onUpdated, agents }: A
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [panelSize, setPanelSize] = useState<'narrow' | 'wide' | 'full'>('narrow');
 
   // Files functionality
   const [files, setFiles] = useState<FileInfo[]>([]);
@@ -347,8 +349,29 @@ export function AgentSheet({ agentId, open, onOpenChange, onUpdated, agents }: A
   };
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="sm:max-w-lg overflow-y-auto">
+    <Sheet open={open} onOpenChange={(v) => { if (!v) setPanelSize('narrow'); onOpenChange(v); }}>
+      <SheetContent className={cn(
+        "overflow-y-auto transition-all duration-200",
+        panelSize === 'narrow' && "sm:max-w-lg",
+        panelSize === 'wide' && "sm:max-w-3xl",
+        panelSize === 'full' && "sm:max-w-[100vw] w-full",
+      )}>
+        <div className="flex items-center gap-1 mb-2">
+          <button type="button" onClick={() => onOpenChange(false)} title="Close panel"
+            className="p-1.5 rounded hover:bg-accent transition-colors text-muted-foreground hover:text-foreground">
+            <ChevronsRight className="w-4 h-4" />
+          </button>
+          <button type="button" onClick={() => setPanelSize(panelSize === 'wide' ? 'narrow' : 'wide')}
+            title={panelSize === 'wide' ? 'Narrow view' : 'Wide view'}
+            className={cn("p-1.5 rounded hover:bg-accent transition-colors", panelSize === 'wide' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground')}>
+            <Maximize2 className="w-4 h-4" />
+          </button>
+          <button type="button" onClick={() => setPanelSize(panelSize === 'full' ? 'narrow' : 'full')}
+            title={panelSize === 'full' ? 'Side panel' : 'Full width'}
+            className={cn("p-1.5 rounded hover:bg-accent transition-colors", panelSize === 'full' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground')}>
+            <PanelRightClose className="w-4 h-4" />
+          </button>
+        </div>
         <SheetHeader>
           <SheetTitle>Agent Details</SheetTitle>
         </SheetHeader>

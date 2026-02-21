@@ -260,7 +260,8 @@ export async function getRepoPath(projectId: string): Promise<string | null> {
               // Repo not cloned — auto-clone to /tmp
               const clonePath = `/tmp/${repoSlug}`;
               try {
-                await execAsync(`git clone "${proj.repo_url}" "${clonePath}"`, { timeout: 120000 });
+                const cloneUrl = proj.clone_url || proj.repo_url;
+                await execAsync(`git clone "${cloneUrl}" "${clonePath}"`, { timeout: 120000 });
                 if (file) { proj.local_path = clonePath; await fs.writeFile(file, JSON.stringify(proj, null, 2)); }
                 return clonePath;
               } catch (cloneErr) {

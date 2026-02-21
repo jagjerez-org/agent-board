@@ -106,16 +106,14 @@ export interface TaskIndex {
 
 // Valid state transitions
 // Forward flow + can always go back to backlog or refinement
-export const VALID_TRANSITIONS: Record<TaskStatus, TaskStatus[]> = {
-  backlog: ['refinement', 'todo'],
-  refinement: ['pending_approval', 'backlog'],
-  pending_approval: ['todo', 'refinement', 'backlog'],
-  todo: ['in_progress', 'refinement', 'backlog'],
-  in_progress: ['review', 'refinement', 'backlog'],
-  review: ['done', 'refinement', 'backlog'],
-  done: ['production', 'backlog'],
-  production: ['backlog'],
-};
+const ALL_STATUSES: TaskStatus[] = [
+  'backlog', 'refinement', 'pending_approval', 'todo',
+  'in_progress', 'review', 'done', 'production',
+];
+
+export const VALID_TRANSITIONS: Record<TaskStatus, TaskStatus[]> = Object.fromEntries(
+  ALL_STATUSES.map(s => [s, ALL_STATUSES.filter(t => t !== s)])
+) as Record<TaskStatus, TaskStatus[]>;
 
 export const TASK_STATUSES: TaskStatus[] = [
   'backlog',

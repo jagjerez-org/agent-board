@@ -1,4 +1,4 @@
-import { getGatewayConfig } from "@/lib/gateway";
+import { spawnAgent } from "@/lib/openclaw-api";
 import { NextRequest, NextResponse } from 'next/server';
 import { getTask, updateTask } from '@/lib/task-store';
 import { readFile, writeFile, mkdir } from 'fs/promises';
@@ -35,7 +35,6 @@ async function addChatMessage(taskId: string, msg: ChatMessage) {
   await writeFile(join(CHAT_DIR, `${taskId}.json`), JSON.stringify(messages, null, 2), 'utf8');
 }
 
-
 // GET /api/tasks/[id]/refine — poll refinement status
 export async function GET(_request: NextRequest, { params }: Props) {
   const { id } = await params;
@@ -53,7 +52,7 @@ export async function GET(_request: NextRequest, { params }: Props) {
   }
 }
 
-// POST /api/tasks/[id]/refine — trigger refinement with chat context
+// POST /api/tasks/[id]/refine — spawn agent directly via OpenClaw API
 export async function POST(request: NextRequest, { params }: Props) {
   try {
     const { id } = await params;
@@ -61,35 +60,34 @@ export async function POST(request: NextRequest, { params }: Props) {
     if (!result) return NextResponse.json({ error: 'Task not found' }, { status: 404 });
     const { task } = result;
 
-    // Get chat history for context
     const chatHistory = await getChatMessages(id);
-    const chatContext = chatHistory.map(m => 
-      `[${m.role === 'user' ? 'Jose Alejandro' : m.agent_id || 'Agent'}]: ${m.content}${m.images?.length ? ` (${m.images.length} image(s) attached)` : ''}`
-    ).join('\n');
+    const chatContext = chatHistory
+      .filter(m => !m.content.startsWith('⏳') && !m.content.startsWith('✅') && !m.content.startsWith('🔄'))
+      .map(m => `[${m.role === 'user' ? 'User' : m.agent_id || 'Agent'}]: ${m.content}`)
+      .join('\n');
 
     const agentId = task.assignee || 'worker-code';
     const refinePath = join(REFINE_DIR, `${id}.json`);
     const resultPath = join(REFINE_DIR, `${id}.md`);
+    const taskFilePath = join(process.cwd(), 'data', 'tasks', `${id}.md`);
 
-    // Write status file
     if (!existsSync(REFINE_DIR)) await mkdir(REFINE_DIR, { recursive: true });
-    await writeFile(refinePath, JSON.stringify({ status: 'running', agentId, startedAt: new Date().toISOString() }), 'utf8');
 
-    // Add agent "thinking" message to chat
+    // Write spawning status
+    await writeFile(refinePath, JSON.stringify({
+      status: 'spawning', agentId, taskId: id,
+      startedAt: new Date().toISOString(),
+    }, null, 2), 'utf8');
+
     await addChatMessage(id, {
-      id: uuidv4(),
-      role: 'agent',
+      id: uuidv4(), role: 'agent',
       content: '⏳ Analyzing task and generating refinement...',
-      timestamp: new Date().toISOString(),
-      agent_id: agentId,
+      timestamp: new Date().toISOString(), agent_id: agentId,
     });
 
-    // Update task with "in progress" marker
-    await updateTask(id, {
-      refinement: '> ⏳ Refinement in progress...',
-    });
+    await updateTask(id, { refinement: '> ⏳ Refinement in progress...' });
 
-    const prompt = `You are refining a task for the development board. 
+    const prompt = `You are refining a task for the development board.
 
 **Task:** ${task.title}
 **Description:** ${task.description || 'No description'}
@@ -110,70 +108,73 @@ IMPORTANT: After generating the refinement, you MUST save the result by writing 
 1. Write the markdown refinement to: ${resultPath}
 2. Write this JSON to: ${refinePath}
    {"status":"done","agentId":"${agentId}","completedAt":"<current ISO timestamp>"}
-
-Also update the task file by reading and updating: ${join(process.cwd(), 'data', 'tasks', `${id}.md`)}
-- Update the \`refinement\` field in the YAML frontmatter with the full markdown (use | for multiline).
+3. Read the task file at ${taskFilePath}, update the \`refinement\` field in YAML frontmatter with the full markdown (use | for multiline), and write it back.
 
 Be concise and specific. Do all file writes before finishing.`;
 
-    // Write pending status with prompt so heartbeat/wake can pick it up
-    await writeFile(refinePath, JSON.stringify({ status: 'pending', agentId, taskId: id, prompt, startedAt: new Date().toISOString() }, null, 2), 'utf8');
+    // Spawn agent directly via OpenClaw HTTP API
+    const spawnResult = await spawnAgent({
+      task: prompt,
+      agentId,
+      label: `refine:${id.slice(0, 8)}`,
+      timeoutSeconds: 180,
+    });
 
-    // Send wake event to OpenClaw main session to trigger immediate spawn
-    const gateway = await getGatewayConfig();
-    if (gateway) {
-      try {
-        const wakeText = `[Agent Board] Refinement requested for task ${id}. Check /tmp/agent-board/data/refinements/ for pending refinements and spawn agents for them.`;
-        await fetch(`${gateway.url}/api/v1/cron/wake`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${gateway.token}` },
-          body: JSON.stringify({ text: wakeText, mode: 'now' }),
-        });
-      } catch (err: unknown) {
-        console.error('Wake event failed (will be picked up by heartbeat):', err);
-      }
+    if (!spawnResult.success) {
+      await writeFile(refinePath, JSON.stringify({
+        status: 'error', agentId, taskId: id,
+        error: spawnResult.error,
+        startedAt: new Date().toISOString(),
+      }, null, 2), 'utf8');
+
+      await addChatMessage(id, {
+        id: uuidv4(), role: 'agent',
+        content: `❌ Failed to spawn agent: ${spawnResult.error}`,
+        timestamp: new Date().toISOString(), agent_id: 'system',
+      });
+
+      return NextResponse.json({ error: spawnResult.error }, { status: 500 });
     }
 
-    return NextResponse.json({ status: 'started', agentId });
+    // Update status with session key for tracking
+    await writeFile(refinePath, JSON.stringify({
+      status: 'running', agentId, taskId: id,
+      sessionKey: spawnResult.sessionKey,
+      startedAt: new Date().toISOString(),
+    }, null, 2), 'utf8');
+
+    return NextResponse.json({ status: 'started', agentId, sessionKey: spawnResult.sessionKey });
   } catch (error: any) {
     console.error('Refine error:', error);
     return NextResponse.json({ error: error.message || 'Failed' }, { status: 500 });
   }
 }
 
-// PUT /api/tasks/[id]/refine — callback to update refinement result (can be called by agent or externally)
+// PUT /api/tasks/[id]/refine — callback to update refinement result
 export async function PUT(request: NextRequest, { params }: Props) {
   try {
     const { id } = await params;
     const body = await request.json();
     const { refinement, agentId } = body;
 
-    if (!refinement) {
-      return NextResponse.json({ error: 'refinement content required' }, { status: 400 });
-    }
+    if (!refinement) return NextResponse.json({ error: 'refinement content required' }, { status: 400 });
 
     const result = await getTask(id);
     if (!result) return NextResponse.json({ error: 'Task not found' }, { status: 404 });
 
-    // Update the task with refinement
     await updateTask(id, { refinement });
 
-    // Update status file
     const refinePath = join(REFINE_DIR, `${id}.json`);
     if (!existsSync(REFINE_DIR)) await mkdir(REFINE_DIR, { recursive: true });
-    await writeFile(refinePath, JSON.stringify({ 
-      status: 'done', 
-      agentId: agentId || 'unknown',
-      completedAt: new Date().toISOString() 
+    await writeFile(refinePath, JSON.stringify({
+      status: 'done', agentId: agentId || 'unknown',
+      completedAt: new Date().toISOString()
     }), 'utf8');
 
-    // Add completion message to chat
     await addChatMessage(id, {
-      id: uuidv4(),
-      role: 'agent',
+      id: uuidv4(), role: 'agent',
       content: '✅ Refinement complete.',
-      timestamp: new Date().toISOString(),
-      agent_id: agentId,
+      timestamp: new Date().toISOString(), agent_id: agentId,
     });
 
     return NextResponse.json({ success: true });
